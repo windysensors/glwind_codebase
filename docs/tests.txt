@@ -1,0 +1,22 @@
+### tests.txt ###
+# author: Elliott Walker
+# last update: 8 July 2024
+# description: instructions for creating and running tests
+
+Writing tests:
+    Tests should return whether or not they *failed*. False if success, True if failure.
+
+Incorporating tests:
+    A test script file should have its title prefixed with "TEST-", and be included directly in the tests directory (glwind_codebase/tests/).
+    Within the test script, there should be a function RUN_TESTS.
+        Tests should be incorporated into this function. The RUN_TESTS function can then optionally be called in a main body loop for a call of the single file.
+        This function should return 0 if all tests pass, and otherwise return an integer error code corresponding to the test which failed.
+
+Running tests:
+    Test files can be individually run if they are written to include a call to RUN_TESTS in their main body loop.
+    To run all test files in the tests directory, execute run_tests.py in that directory.
+
+Test contexts:
+    A test file requires access to import 
+
+For an example, see e.g. TEST-atmo_calc.py in the tests directory.
