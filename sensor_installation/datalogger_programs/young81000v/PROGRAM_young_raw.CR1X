@@ -1,0 +1,50 @@
+''' PROGRAM_young_raw.CR1X '''
+' Author:       Elliott Walker
+' Last update:  July 3, 2024
+' Description:  Takes raw input @ 10 Hz from the Young 81000V
+' Usage:        Program to directly run in CR1000X datalogger with RS-232 wiring (@ComC5) to Young 81000V
+' Dependencies: young_config.CR1X (expected in CPU)
+
+' external code
+Include("CPU:young_config.CR1X")
+
+' declare public variables
+Public RawData As String * 256
+Public BytesRecorded
+
+' baud rate for the 81000V per the manual
+Const BaudRate = -38400
+
+' serial output string format
+Const FormatString = "5AB" ' UVW, speed of sound, sonic temp
+Const OutputLength = 36    ' 5AB takes 21+7+8=36 bytes
+
+' measurement frequency
+Const Frequency = 10
+
+' data tables
+DataTable(Table1, True, -1)
+    DataInterval(0, 1000/Frequency, msec, 10)
+    Sample(1, RawData, String)
+    Sample(1, BytesRecorded, UINT2)
+EndTable
+
+' main program
+BeginProg
+    ' open serial port for RS-232 communication with sensor  
+    SerialOpen(ComC5, BaudRate, 0, 0, 10000, 0)
+    
+    ' modify settings
+    Call ChangeFormat(ComC5, FormatString)
+    Call ChangeFrequency(ComC5, Frequency)
+    
+    ' main scan
+    Scan(1000/Frequency, msec, 0, 0)
+        ' take in data (most recent record)
+        SerialInRecord(ComC5, RawData, 0, OutputLength, &h0D, BytesRecorded, 01)
+        ' store data in table
+        CallTable Table1
+    NextScan
+    
+EndProg
+

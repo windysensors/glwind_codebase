@@ -1,0 +1,174 @@
+'CR350 Series Datalogger
+'Cleveland State University program for MetSENS500 + WindSonic4
+'Runs data collection for concurrent connection of 2 devices
+'to the same CR350 datalogger. First uses RS-232, second SDI-12.
+'Author: Elliott Walker, assisted by Garrison Sagers
+'6.20.24
+
+'Declare variables
+Const CollectDelayMS = 2000
+Dim MSStr As String * 60
+Dim ByteRet
+Dim ChkSumF As Boolean
+Public MSData(9)
+Public WSData(3)
+Const MagDeclination = 10.24 ' Cleveland OH magnetic declination, deg
+' MetSENS500
+Public WD_1 ' for calculated true wind direction
+Alias MSData(1) = WD_UC_1 ' uncorr. wind dir.
+Alias MSData(2) = WSp_1 ' wind speed
+Alias MSData(3) = WD_CC_1 ' compass corr. wind dir.
+Alias MSData(4) = BP ' barom. pressure
+Alias MSData(5) = RH ' rel. humidity
+Alias MSData(6) = AT ' air temp.
+Alias MSData(7) = DP ' dew point
+Alias MSData(8) = MS_V ' metsens voltage
+Alias MSData(9) = MS_Diagnostic ' diagnostic code
+Public MetSENS_Status As String * 30 ' status string, based on MS_Diagnostic
+' WindSonic4
+Alias WSData(1) = WD_2 ' wind dir., this remains uncorrected, so orient sensor!
+Alias WSData(2) = WSp_2 ' wind speed
+Alias WSData(3) = WS_Diagnostic ' diagnostic code
+Public WindSonic_Status As String * 30 ' status string, based on WS_Diagnostic
+' Datalogger
+Public BattV ' battery voltage
+Public PTemp ' panel temperature
+
+' Set up units
+Units WD_UC_1 = Deg
+Units WD_CC_1 = Deg
+Units WD_1 = Deg ' true
+Units WSp_1 = m/s
+Units BP = hPa
+Units RH = %
+Units AT = Deg C
+Units DP = Deg C
+Units MS_V = V
+Units MS_Diagnostic = unitless
+Units WD_2 = Deg
+Units WSp_2 = m/s
+Units WS_Diagnostic = unitless
+Units BattV = V
+Units PTemp = Deg C
+
+' Define Data Tables
+' Take data from MS every 15 seconds
+DataTable (MetSens, True, -1)
+  DataInterval (0, 15, Sec, 10)
+  WindVector (1, WSp_1, WD_1, IEEE4, WD_1 = NAN, 0, 0, 1)
+  FieldNames ("WSp_avg_1,WD_vct_1")
+  Sample (1, WD_1, IEEE4)
+  Sample (1, WSp_1, IEEE4)
+  Sample (1, BP, IEEE4)
+  Sample (1, RH, FP2)
+  Average (1, AT, FP2, AT = NAN)
+  Sample (1, DP, FP2)
+  Sample (1, MetSENS_Status, String)
+EndTable
+' Take data from WS every 15 seconds
+DataTable (WindSonic, True, -1)
+  DataInterval (0, 15, Sec, 10)
+  WindVector (1, WSp_2, WD_2, FP2, WD_2 = NAN, 0, 0, 1)
+  FieldNames ("WSp_avg_2,WD_D1_2,WD_SD1_2")
+  Sample (1, WD_2, IEEE4)
+  Sample (1, WSp_2, IEEE4)
+  Sample (1, WindSonic_Status, String)
+EndTable
+' Daily check in with datalogger
+DataTable(Daily, True, -1)
+  DataInterval(0, 1440, Min, 10)
+  Maximum (1, AT, FP2, AT = NAN, True)
+  Minimum (1, AT, FP2, AT = NAN, True)
+  Sample (1, PTemp, FP2)
+  Minimum (1, BattV, FP2, False, False)
+EndTable
+
+' Main Program
+BeginProg
+  ' Open COM1 for communications with the MetSENS500
+  SW12 (SW12_1,1 )
+  ' Main Scan
+  Scan(CollectDelayMS/2,msec,1,0)
+    ' WINDSONIC4
+    ' Record data
+    SDI12Recorder(WD_2, C1, "0", "R0!", 1, 0)
+    If WD_2 = NAN Then
+			Move(WSp_2, 2, WD_2, 1)
+		EndIf
+    Select Case WS_Diagnostic
+      Case = 0
+        WindSonic_Status = "OK"
+      Case = 1
+        WindSonic_Status = "Axis 1 Failed"
+      Case = 2
+        WindSonic_Status = "Axis 2 Failed"
+      Case = 4
+        WindSonic_Status = "Both Axes Failed"
+      Case = 8
+        WindSonic_Status = "NVM Error"
+      Case = 9
+        WindSonic_Status = "ROM Error"
+      Case = 10
+        WindSonic_Status = "Maximum Gain"
+      Else
+        WindSonic_Status = "Unknown Fault"
+    EndSelect
+    ' Store data
+    CallTable WindSonic
+    ' METSENS500
+    Delay(0,CollectDelayMS/4,msec)
+    SerialOpen(Com1,9600,3,0,301)
+    Delay(0,CollectDelayMS/4,msec)
+    ' Get the data from the serial buffer
+    SerialInRecord(Com1,MSStr,&h02,0,&h0D0A,ByteRet,01)
+    ' Use checksum to verify the integrity of the data message
+    ChkSumF=HexToDec(Right(MSStr,2)) Eqv CheckSum(MSStr,9,Len(MSStr)-3)
+    If NOT ChkSumF Then MSStr = NAN
+    ' Parse the data string
+    SplitStr(MSData(),MSStr,",",9,4)
+    ' Checksum
+    Public Fault_Checksum As Boolean
+    Fault_Checksum = 0
+    If NOT (ByteRet <> 0 IMP ChkSumF) Then Fault_Checksum=1
+    ' Diagnostics
+    If ByteRet=0 Then MetSENS_Status=404
+    If Fault_Checksum Then MetSENS_Status = 505
+    Select Case MS_Diagnostic
+      Case = 0
+        MetSENS_Status = "OK"
+      Case = 1
+  			MetSENS_Status = "Wind Fault"
+      Case = 10
+  			MetSENS_Status = "Temperature Fault"
+  		Case = 20
+  			MetSENS_Status = "Dew Point Fault"
+  		Case = 40
+  			MetSENS_Status = "Humidity Fault"
+  		Case = 80
+  			MetSENS_Status = "Barometer Fault"
+  		Case = 100
+  			MetSENS_Status = "Compass Fault"
+  	  Case = 404
+  	    MetSENS_Status = "Empty Data Fault"
+  	  Case = 505
+  	    MetSENS_Status = "Checksum Fault"
+  		Else
+  			MetSENS_Status = "Unknown Fault"
+    EndSelect
+    ' Calculate the true wind direction for MS
+    If WD_UC_1 <> NAN AND MetSENS_Status = "OK" AND Fault_Checksum = 0 Then
+      ' Wind measurement is good
+      WD_1 = (WD_CC_1 + MagDeclination + 360) MOD 360
+    Else
+      WD_1 = NAN
+    EndIf
+    ' Store data
+    CallTable MetSens
+    ' DATALOGGER
+    Battery(BattV)
+    PanelTemp(PTemp,60)
+    ' Store data
+    CallTable Daily
+  NextScan
+EndProg
+
