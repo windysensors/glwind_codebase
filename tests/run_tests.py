@@ -1,3 +1,9 @@
+### run_tests.py ###
+# author: Elliott Walker
+# last update: 8 July 2024
+# description: runs all tests in tests directory; see info in docs/tests.txt
+# usage: python run_tests.py
+
 def RUN_ALL_TESTS():
     import os
     import context

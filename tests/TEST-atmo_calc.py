@@ -1,5 +1,14 @@
+### TEST-atmo_calc.py ###
+# author: Elliott Walker
+# last update: 8 July 2024
+# description: tests for atmo_calc.py
+
+# ERROR CODES (0 - success):
+#   1 - local_gravity
+#   2 - saturation_vapor_pressure
+
 import context
-import glwind.atmo_calc as atmo_calc
+import windprofile_analysis.atmo_calc as atmo_calc
 from math import isclose
 
 def _UT_local_gravity():

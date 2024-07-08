@@ -17,6 +17,8 @@ Running tests:
     To run all test files in the tests directory, execute run_tests.py in that directory.
 
 Test contexts:
-    A test file requires access to import 
+    A test file requires certain code files be imported from the glwind directory.
+    To be able to add files from this directory, or more broadly from anywhere in the glwind_codebase parent,
+    first import the contents of context.py (`import context.py`) then import any necessary files (e.g. `import glwind.atmo_calc`).
 
 For an example, see e.g. TEST-atmo_calc.py in the tests directory.
