@@ -8,7 +8,7 @@
 #   2 - saturation_vapor_pressure
 
 import context
-import windprofile_analysis.atmo_calc as atmo_calc
+import windprofiles.atmo_calc as atmo_calc
 from math import isclose
 
 def _UT_local_gravity():
