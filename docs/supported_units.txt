@@ -1,0 +1,30 @@
+* Denote the common/standard unit.
+
+Pressure [P] units:
+    kPa (kilopascals) *
+    hPa (hectopascals)
+
+Temperature [T] units:
+    K (Kelvin) *
+    deg C (degrees Celsius)
+    deg F (degrees Fahrenheit)
+
+Wind speed [ws] units:
+    m/s (meters per second) *
+    mph (miles per hour)
+
+Lengths (heights) [z] units:
+    m (meters) *
+    km (kilometers)
+    ft (feet)
+    mi (miles)
+
+Relative humidity [rh] units:
+    dec (decimal) *
+    percent (percentage)
+
+Wind direction [wd] units (reference directions):
+    N-CW (degrees clockwise of North) *
+    N-CC (degrees counterclockwise of North)
+    E-CW (degrees clockwise of East)
+    E-CC (degrees counterclockwise of East)

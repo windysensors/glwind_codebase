@@ -22,7 +22,9 @@ temperatures_K = {
     # linear conversion pair (a,b): <value in K> = a * (<value in UNIT> + b)
     'K' : (1,0), # Kelvin
     'deg C' : (1.,273.15), # degree Celsius
-    'deg F' : (5/9.,827.406) # degree Fahrenheit
+    'C' : (1.,273.15), # degree Celsius, alternative
+    'deg F' : (5/9,827.406), # degree Fahrenheit
+    'F' : (5/9,827.406) # degree Farenheit, alternative
 }
 
 windspeeds_mtps = {
@@ -112,42 +114,32 @@ class Quantity():
         self._unit = unit
         if not _find_dimension(unit):
             print(f'WARNING: unit {unit} not found')
+
     def __str__(self):  
         return f'{self._value} {self._unit}'
+    
     def __repr__(self):
         return self.__str__()
+    
     def __float__(self):
         return self._value
+    
     def __add__(self, other: Quantity):
         if '_unit' in dir(other) and other._unit != self._unit:
             raise QuantityError(f'Could not add quantities of {self._unit} and {other._unit}')
         return float.__add__(self._value, other)
+    
     def __eq__(self, other: Quantity):
         if '_unit' in dir(other) and '_value' in dir(other):
             if self._unit == other._unit:
                 return self._value == other._value
             return self.convert('kPa') == other.convert('kPa')
         return float.__eq__(self._value, other)
+    
     def convert(self, newUnit: str) -> Quantity:
         return Quantity(self.in_units_of(newUnit), newUnit)
+    
     def in_units_of(self, newUnit: str):
         return convert_value(self._value,self._unit,newUnit)
-        """
-        dimension = _find_dimension(self._unit)
-        if not dimension:
-            raise QuantityError(f'Could not convert {self._unit} to {newUnit}: unit {self._unit} not found')
-        if newUnit not in unit_search[dimension].keys():
-            raise QuantityError(f'Could not convert {self._unit} to {newUnit}: invalid or mismatched dimensions')
-        a1, b1, isDir, *_ = unit_search[dimension][self._unit] + (None,)
-        a2, b2, isDir, *_ = unit_search[dimension][newUnit] + (None,)
-        standardized = a1 * (self._value + b1)
-        if isDir:
-            standardized %= 360
-        converted = standardized/a2 - b2
-        if isDir:
-            converted %= 360
-        return converted
-        """
-
 
 # NEED TO TEST THE QUANTITY CLASS TO SEE IF FLOAT CASTING IS IMPLICITLY CALLED ON *, ETC
