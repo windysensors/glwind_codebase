@@ -38,7 +38,7 @@ def _timeName(df, oldName, hid) -> None:
 
 # Boom object class
 # Structure for holding time-series data from a single met tower boom (pd.DataFrame underlying)
-# Methods for merging with other Booms as well as basic data handling (outlier removal, resampling)
+# Methods for merging with other Booms, as well as data handling (outlier removal, resampling)
 class Boom:
     def __init__(self, dataframe: pd.DataFrame, height: float|Quantity, *,
                  time: str='TIMESTAMP', ws: tuple[str,str]=None, wd: tuple[str,str]=None,
@@ -230,10 +230,32 @@ class Sonic:
     def associate(self, other: Boom):
         pass
 
+# MetTower object class
+# Structure for holding a collection of booms
 class MetTower:
-    def __init__(self, name: str, booms: list[Boom], latitude: float, longitude: float, terrain_class: atmo_calc.TerrainClassifier=None):
+    def __init__(self, name: str, booms: list[Boom]|dict[str,Boom], latitude: float=None, longitude: float=None, terrain_class: atmo_calc.TerrainClassifier=None,
+                 copy_booms: bool=True, warnings: bool=False):
+        def boomTypeErr(): raise TypeError("'booms' must be a list of Boom objects or a dict of name:Boom pairs")
         self.name = name
-        self.booms = {int(boom.height) : boom for boom in booms} # list of booms
+        if type(booms) is list: # if a list is passed, assign identifiers based on Boom height id (hid)
+            for boom in booms: # make sure booms are all of Boom type
+                if type(boom) is not Boom:
+                    boomTypeErr()
+            if copy_booms:
+                self.booms = {str(boom.hid) : boom.copy() for boom in booms}
+            else:
+                self.booms = {str(boom.hid) : boom for boom in booms}
+            if len(self.booms) < len(booms) and warnings:
+                print("Warning: data loss due to overlapping boom height identifiers.\n\tIf loss was not intentional, try instead passing 'booms' as a dictionary of name:Boom pairs.")
+        else if type(booms) is dict:
+            for boom in booms.values(): # make sure booms are all of Boom type
+                if type(boom) is not Boom:
+                    boomTypeErr()
+            if copy_booms:
+                self.booms = {str(name) : boom.copy() for name, boom in booms.items()}
+            else:
+                self.booms = {str(name) : boom for name, boom in booms.items()} # still uses dict comprehension because we want to ensure that the keys are strings
+        else: boomTypeErr()
         self.latitude = latitude # coord, deg
         self.longitude = longitude # coord, deg
         self.heights = list(self.booms.keys()) # heights at which data is available
@@ -250,7 +272,7 @@ class MetTower:
         for boom in self.booms.values():
             boom.resample(n_samples=n_samples, inplace=True, verbose=verbose)
 
-    def classify_terrain(self, height):
+    def classify_terrain(self, height: ):
         pass
 
     def compute_vpt(self, verbose: bool=False) -> None:
@@ -259,6 +281,13 @@ class MetTower:
                 boom.compute_vpt()
                 if verbose:
                     print(f'Computed virtual potential temperatures @{boom.hid}m.')
+        return
+
+    def set_coordinates(self, latitude: float=None, longitude: float=None) -> None:
+        if latitude:
+            self.latitude = latitude
+        if longitude:
+            self.longitude = longitude
 
     @staticmethod
     def load(filename: str) -> MetTower:

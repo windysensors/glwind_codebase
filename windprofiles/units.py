@@ -42,7 +42,9 @@ lengths_m = {
 relhumidity_dec = {
     # linear conversion pair (a,b): <decimal value> = a * (<value in UNIT> + b)
     'dec' : (1,0), # decimal
-    'percent' : (0.01,0) # percentage
+    'decimal' : (1,0), # decimal, alternative
+    'percent' : (0.01,0), # percentage
+    '%' : (0.01,0) # percentage, alternative
 }
 
 direction_NCW = {

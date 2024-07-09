@@ -102,7 +102,7 @@ crBoomTop = crBoom6 + crBoom7
 # form the met tower by combining all booms
 cedarRapidsTower = MetTower(
     name = 'Cedar Rapids, Ohio',
-    booms = [crBoom1, crBoom2, crBoom3, crBoom4, crBoom5, crBoom6+crBoom7],
+    booms = [crBoom1, crBoom2, crBoom3, crBoom4, crBoom5, crBoomTop],
     latitude = 41.9779,
     longitude = 91.6656,
     terrain_class = crTerrainClassifier
