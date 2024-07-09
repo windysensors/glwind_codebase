@@ -80,6 +80,9 @@ class Boom:
     def print_data(self) -> None:
         print(self._data)
 
+    def copy(self, keep_notes: bool=True) -> Boom:
+        return Boom(self._data.copy(), self.height, automatic = True, notes = self.notes * keep_notes)
+
     def copy_data(self) -> pd.DataFrame:
         return self._data.copy()
 
@@ -234,7 +237,7 @@ class Sonic:
 # Structure for holding a collection of booms
 class MetTower:
     def __init__(self, name: str, booms: list[Boom]|dict[str,Boom], latitude: float=None, longitude: float=None, terrain_class: atmo_calc.TerrainClassifier=None,
-                 copy_booms: bool=True, warnings: bool=False):
+                 copy_booms: bool=True, warnings: bool=True):
         def boomTypeErr(): raise TypeError("'booms' must be a list of Boom objects or a dict of name:Boom pairs")
         self.name = name
         if type(booms) is list: # if a list is passed, assign identifiers based on Boom height id (hid)
@@ -247,7 +250,7 @@ class MetTower:
                 self.booms = {str(boom.hid) : boom for boom in booms}
             if len(self.booms) < len(booms) and warnings:
                 print("Warning: data loss due to overlapping boom height identifiers.\n\tIf loss was not intentional, try instead passing 'booms' as a dictionary of name:Boom pairs.")
-        else if type(booms) is dict:
+        elif type(booms) is dict:
             for boom in booms.values(): # make sure booms are all of Boom type
                 if type(boom) is not Boom:
                     boomTypeErr()
@@ -258,8 +261,9 @@ class MetTower:
         else: boomTypeErr()
         self.latitude = latitude # coord, deg
         self.longitude = longitude # coord, deg
-        self.heights = list(self.booms.keys()) # heights at which data is available
+        self.available_heights = [boom.height for boom in self.booms.values()].sort()
         self.terrain_class = terrain_class # terrain classification function
+        self.has_canonical_time = False
 
     def save(self, filename: str):
         pass
@@ -272,7 +276,52 @@ class MetTower:
         for boom in self.booms.values():
             boom.resample(n_samples=n_samples, inplace=True, verbose=verbose)
 
-    def classify_terrain(self, height: ):
+    def associate_canonical_time(self, which_booms: list[Boom], verbose: bool=False, warnings: bool=True) -> None:
+        if self.has_canonical_time:
+            print(f"MetTower '{self.name}' already has a canonical time associated with it.\n\tTo unassociate, make a call to MetTower.unassociate().")
+            return
+        timeSeries = None
+        for boom in which_booms:
+            if boom not in self.booms.keys():
+                if warnings:
+                    print(f"Warning: in canonical time association for MetTower '{self.name}', could not find Boom '{boom}' - skipping.")
+                continue
+            boomTime = self.booms[boom]._data.reset_index()['time'] # or just _data.index ?
+            if timeSeries is not None:
+                timeSeries = timeSeries[timeSeries.isin(boomTime)]
+            else:
+                timeSeries = boomTime
+        if timeSeries is None:
+            return
+        self._data = pd.DataFrame(timeSeries, columns=['time'])
+        if verbose:
+            print(f"Associated canonical datetimes (N = {len(self._data)}) to MetTower '{self.name}'.")
+        print(self._data)
+        self.has_canonical_time = True
+
+    def unassociate_canonical_time(self) -> None:
+        if not self.has_canonical_time:
+            print(f"MetTower '{self.name}' does not have an associated canonical time.")
+            return
+        del self._data
+        self.has_canonical_time = False
+
+    def classify_terrain(self, boom: str):
+        if boom not in self.booms.keys():
+            raise NameNotFound(f"Boom '{boom}' not found in MetTower {self.name}.")
+        boomObj = self.booms[boom]
+        if 'wd' not in boomObj.available_data:
+            raise AvailabilityError(f"Boom '{boom}' in MetTower {self.name} does not contain wind direction data.")
+        directions = boomObj['wd']
+        pass
+
+    def compute_bulk_Ri(self, boom1: str, boom2: str):
+        pass
+        
+    def powerlaw_all(self):
+        pass
+
+    def powerlaw_stratified(self):
         pass
 
     def compute_vpt(self, verbose: bool=False) -> None:

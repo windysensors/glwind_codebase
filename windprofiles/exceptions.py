@@ -1,4 +1,4 @@
-# NameNotFound exception for improper data column access in Boom or MetTower
+# NameNotFound exception for improper data column / object access in Boom or MetTower
 class NameNotFound(Exception):
     pass
 

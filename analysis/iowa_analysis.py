@@ -3,6 +3,8 @@ from atmo_calc import TerrainClassifier
 from units import Quantity
 import os
 
+VERBOSE = True
+
 # terrain classification based on wind direction for Cedar Rapids, Iowa met tower
 # boundaries based on work in Ahlman-Zhang-Markfort manuscript
 crTerrainClassifier = TerrainClassifier(
@@ -21,7 +23,7 @@ crBoom1 = Boom.generate(
     wd = ('MeanDirection','E-CW'),
     T = ('MeanTemperature (C )','deg C'),
     P = ('MeanPressure (mmHg)','mmHg'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 2, at 10 meters
@@ -33,7 +35,7 @@ crBoom2 = Boom.generate(
     wd = ('MeanDirection','E-CW'),
     rh = ('MeanRH (%)','percent'),
     T = ('MeanTemperature (C )','deg C'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 3, at 20 meters
@@ -43,7 +45,7 @@ crBoom3 = Boom.generate(
     time = 'TIMESTAMP',
     ws = ('MeanVelocity (m/s)','m/s'),
     wd = ('MeanDirection','E-CW'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 4, at 32 meters
@@ -55,7 +57,7 @@ crBoom4 = Boom.generate(
     wd = ('MeanDirection','E-CW'),
     rh = ('MeanRH','percent'),
     T = ('MeanTemperature','deg C'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 5, at 80 meters
@@ -67,7 +69,7 @@ crBoom5 = Boom.generate(
     wd = ('MeanDirection','E-CW'),
     rh = ('MeanRH','percent'),
     T = ('MeanTemperature','deg C'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 6, at 106 meters
@@ -79,7 +81,7 @@ crBoom6 = Boom.generate(
     wd = ('Mean Direction','E-CW'),
     rh = ('MeanRH (%)','percent'),
     T = ('MeanTemperature (C )','deg C'),
-    verbose=True
+    verbose=VERBOSE
 )
 
 # boom 7, at 106 meters
@@ -90,7 +92,7 @@ crBoom7 = Boom.generate(
     ws = ('MeanVelocity (m/s)','m/s'),
     wd = ('MeanDirection','E-CW'),
     P = ('MeanPressure (mmHg)','mmHg'),
-    verbose=True
+    verbose = VERBOSE
 )
 
 # use the pressure data from boom 1 in boom 2
@@ -102,13 +104,21 @@ crBoomTop = crBoom6 + crBoom7
 # form the met tower by combining all booms
 cedarRapidsTower = MetTower(
     name = 'Cedar Rapids, Ohio',
-    booms = [crBoom1, crBoom2, crBoom3, crBoom4, crBoom5, crBoomTop],
+    booms = {
+        '6m' : crBoom1,
+        '10m' : crBoom2,
+        '20m' : crBoom3,
+        '32m' : crBoom4,
+        '80m' : crBoom5,
+        '106m' : crBoomTop
+    },
     latitude = 41.9779,
     longitude = 91.6656,
     terrain_class = crTerrainClassifier
 )
 
 # data cleaning and basic calculations
-cedarRapidsTower.remove_outliers(verbose=True)
-cedarRapidsTower.resample(10, verbose=True)
-cedarRapidsTower.compute_vpt(verbose=True)
+cedarRapidsTower.remove_outliers(n_samples=30, sigma=5, verbose=VERBOSE)
+cedarRapidsTower.resample(n_samples=10, verbose=VERBOSE)
+cedarRapidsTower.compute_vpt(verbose=VERBOSE)
+cedarRapidsTower.associate_canonical_time(which_booms=['6m','10m','20m','32m','106m'], verbose=VERBOSE)
