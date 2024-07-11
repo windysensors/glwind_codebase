@@ -1,3 +1,8 @@
+### exceptions.py ###
+# author: Elliott Walker
+# last update: 11 July 2024
+# description: Custom exception types
+
 # NameNotFound exception for improper data column / object access in Boom or MetTower
 class NameNotFound(Exception):
     pass
@@ -16,4 +21,8 @@ class FilehandlingError(Exception):
 
 # AvailabilityError exception for trying to perform a calculation with a dataset lacking the necessary data
 class AvailabilityError(Exception):
+    pass
+
+# ModeNotFound exception for improper plot mode name
+class ModeNotFound(Exception):
     pass

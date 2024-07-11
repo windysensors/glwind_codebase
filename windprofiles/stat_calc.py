@@ -1,7 +1,7 @@
 ### stat_calc.py ###
 # author: Elliott Walker
 # last update: 9 July 2024
-# description: functions for statistical calculations
+# description: Functions for statistical calculations
 
 # least squares linear fit - fits data in (x,y) pairs to a relationship y = A + B*x
 # xvals and yvals should each be iterables of the same length

@@ -1,9 +1,14 @@
+### iowa_analysis.py ###
+# author: Elliott Walker
+# last update: 11 July 2024
+# description: Uses windprofiles package to perform sample analysis on the Cedar Rapids, Iowa dataset
+
 from windprofiles.objects import Boom, MetTower
 from atmo_calc import TerrainClassifier
 from units import Quantity
 import os
 
-VERBOSE = True
+VERBOSE = False
 
 # terrain classification based on wind direction for Cedar Rapids, Iowa met tower
 # boundaries based on work in Ahlman-Zhang-Markfort manuscript
@@ -121,4 +126,8 @@ cedarRapidsTower = MetTower(
 cedarRapidsTower.remove_outliers(n_samples=30, sigma=5, verbose=VERBOSE)
 cedarRapidsTower.resample(n_samples=10, verbose=VERBOSE)
 cedarRapidsTower.compute_vpt(verbose=VERBOSE)
-cedarRapidsTower.associate_canonical_time(which_booms=['6m','10m','20m','32m','106m'], verbose=VERBOSE)
+cedarRapidsTower.associate_canonical_time(which_booms=['10m','106m'], verbose=VERBOSE)
+cedarRapidsTower.compute_ri('10m','106m', verbose=VERBOSE)
+cedarRapidsTower.save_windrose('10m', 'PLOTS/10mRose.png', mode='speed', verbose=VERBOSE)
+cedarRapidsTower.save_windrose('10m', 'PLOTS/riRose.png', mode='ri', verbose=VERBOSE)
+cedarRapidsTower.save_stabilities('PLOTS/stabilitiesBar.png', verbose=VERBOSE)

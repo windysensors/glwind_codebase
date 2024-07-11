@@ -9,13 +9,15 @@ setup(
         'stat_calc',
         'objects',
         'units',
-        'exceptions'
+        'exceptions',
+        'roses',
+        'temporal'
     ],
     install_requires=[
         'numpy',
         'pandas',
         'matplotlib',
-        'windrose'
+        'seaborn'
     ],
     author='Elliott Walker',
     author_email='walker.elliott.j@gmail.com',

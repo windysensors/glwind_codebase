@@ -1,6 +1,6 @@
 ### booms.py ###
 # author: Elliott Walker
-# last update: 8 July 2024
+# last update: 11 July 2024
 # description: Boom and MetTower object classes
 
 from __future__ import annotations
@@ -9,8 +9,10 @@ from units import convert_value as cnv
 import stat_calc
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import atmo_calc
 import traceback
+import roses
 import os
 from exceptions import *
 
@@ -206,7 +208,6 @@ class Boom:
         # compute virtual potential temperature at each time, creating a new column (in place)
         if not self.vpt_computable():
             raise AvailabilityError(f'Not enough data to compute virtual potential temperature @{self.hid}m')
-            return
         self._data['vpt'] = atmo_calc.virtual_potential_temperature(self._data['rh'], self._data['P'], self._data['T'])
 
     @staticmethod
@@ -269,14 +270,17 @@ class MetTower:
         pass
             
     def remove_outliers(self, n_samples: int=30, sigma: float=5., verbose: bool=False) -> None:
+        # bulk processing: remove outliers in all booms
         for boom in self.booms.values():
             boom.remove_outliers(n_samples=n_samples, sigma=sigma, inplace=True, verbose=verbose)
 
     def resample(self, n_samples: int=10, verbose: bool=False) -> None:
+        # bulk processing: resample all booms
         for boom in self.booms.values():
             boom.resample(n_samples=n_samples, inplace=True, verbose=verbose)
 
     def associate_canonical_time(self, which_booms: list[Boom], verbose: bool=False, warnings: bool=True) -> None:
+        # associate a canonical datetime series for this MetTower, which is the series contanining datetimes common to all booms specified in <which_booms> (inner merge of their time series indices)
         if self.has_canonical_time:
             print(f"MetTower '{self.name}' already has a canonical time associated with it.\n\tTo unassociate, make a call to MetTower.unassociate().")
             return
@@ -296,10 +300,11 @@ class MetTower:
         self._data = pd.DataFrame(timeSeries, columns=['time'])
         if verbose:
             print(f"Associated canonical datetimes (N = {len(self._data)}) to MetTower '{self.name}'.")
-        print(self._data)
+        #print(self._data)
         self.has_canonical_time = True
 
     def unassociate_canonical_time(self) -> None:
+        # unassociate the canonical datetime series associated by MetTower.associate_canonical_time
         if not self.has_canonical_time:
             print(f"MetTower '{self.name}' does not have an associated canonical time.")
             return
@@ -307,6 +312,7 @@ class MetTower:
         self.has_canonical_time = False
 
     def classify_terrain(self, boom: str):
+        # determine terrain classification based on the TerrainClassifier object associated with this MetTower
         if boom not in self.booms.keys():
             raise NameNotFound(f"Boom '{boom}' not found in MetTower {self.name}.")
         boomObj = self.booms[boom]
@@ -315,8 +321,54 @@ class MetTower:
         directions = boomObj['wd']
         pass
 
-    def compute_bulk_Ri(self, boom1: str, boom2: str):
-        pass
+    def compute_ri(self, boom1: str, boom2: str, verbose: bool=False):
+        # computes bulk Richardson number `ri` based on data at two booms
+        if not self.has_canonical_time:
+            raise AvailabilityError(f"Could not compute bulk Ri for MetTower '{self.name}': no associated canonical time.")
+        df1 = self.booms[boom1]._data
+        df2 = self.booms[boom2]._data
+        for bname, df in [(boom1, df1), (boom2, df2)]:
+            if 'vpt' not in df.columns:
+                if self.booms[bname].vpt_computable():
+                    df.compute_vpt()
+                    print(f"Computed missing virtual potential temperatures for boom '{bname}'")
+                else:
+                    raise AvailabilityError(f"Could not compute bulk Ri for MetTower '{self.name}': virtual potential temperature missing & not computable for boom '{bname}'")
+        dfJoined = pd.merge(df1[['vpt','ws','wd']], df2[['vpt','ws','wd']], how='inner', on='time', suffixes=('_1', '_2')).merge(self._data['time'], how='inner', on='time')
+        self._data['ri'] = dfJoined.apply(lambda row : atmo_calc.bulk_richardson_number(row['vpt_1'], row['vpt_2'], self.booms[boom1].height, self.booms[boom2].height, row['ws_1'], row['ws_2'], row['wd_1'], row['wd_2']), axis=1)
+        eliminations = self._data['ri'].isna().sum()
+        self._data.dropna(subset=['ri'], inplace=True)
+        if verbose:
+            print(f"Computed bulk Richardson numbers for MetTower '{self.name}'.")
+            print(f"\tDropped {eliminations} times with NaN Ri output.")
+
+    def classify_stability(self, verbose: bool=False):
+        # determines stability classification using bulk Richardson number, using the function atmo_calc.bulk_stability_class
+        if not self.has_canonical_time:
+            raise AvailabilityError(f"Could not classify stability for MetTower '{self.name}': no associated canonical time.")
+        if not 'ri' in self._data.columns:
+            raise AvailabilityError(f"Could not classify stability for MetTower '{self.name}': bulk Ri not computed.")
+        self._data['stability'] = self._data.apply(lambda row : atmo_calc.bulk_stability_class(row['ri']), axis=1)
+        if verbose:
+            print(f"Determined stability classifications for MetTower '{self.name}'.")
+
+    def save_stabilities(self, filename: str, combine: bool=False, verbose: bool=False):
+        # save a bar plot of the relative frequencies of the stability classifications
+        if not self.has_canonical_time:
+            raise AvailabilityError(f"Could not plot stabilities for MetTower '{self.name}': no associated canonical time.")
+        if not 'stability' in self._data.columns:
+            raise AvailabilityError(f"Could not plot stabilities for MetTower '{self.name}': stability classifications not determined.")
+        stability_r_freqs = self._data['stability'].value_counts(normalize=True)
+        if combine:
+            plt.bar(['unstable','neutral','stable'],[stability_r_freqs['unstable'],stability_r_freqs['neutral'],stability_r_freqs['stable']+stability_r_freqs['strongly stable']], color=['mediumblue','deepskyblue','orange'])
+        else:
+            plt.bar(['unstable','neutral','stable','strongly stable'],[stability_r_freqs['unstable'],stability_r_freqs['neutral'],stability_r_freqs['stable'],stability_r_freqs['strongly stable']], color=['mediumblue','deepskyblue','orange','crimson'])
+        plt.ylabel('relative frequency')
+        plt.title('wind data sorted by thermal stability classification')
+        plt.xticks(rotation=0)
+        plt.grid(axis='y', linestyle='-', alpha=0.8)
+        plt.savefig(filename)
+        plt.close()
         
     def powerlaw_all(self):
         pass
@@ -330,13 +382,34 @@ class MetTower:
                 boom.compute_vpt()
                 if verbose:
                     print(f'Computed virtual potential temperatures @{boom.hid}m.')
-        return
 
     def set_coordinates(self, latitude: float=None, longitude: float=None) -> None:
         if latitude:
             self.latitude = latitude
         if longitude:
             self.longitude = longitude
+
+    def save_windrose(self, boom: str, filename: str, mode: str='speed', palette=None, bin_size: int=None, N_bins: int=None, verbose: bool=False):
+        if boom == 'all':
+            return # FIX
+        if mode.lower() == 'speed':
+            df = self.booms[boom]._data[['ws','wd']]
+        elif mode.lower() == 'ri':
+            if not self.has_canonical_time:
+                raise AvailabilityError(f"Could not plot Ri windrose for MetTower '{self.name}': no associated canonical time.")
+            if not 'ri' in self._data.columns:
+                raise AvailabilityError(f"Could not plot Ri windrose for MetTower '{self.name}': Ri not available.")
+            df = pd.concat([self.booms[boom]._data['wd'], self._data.set_index('time')['ri']], axis=1, join='inner')
+        else:
+            raise ModeNotFound(f"Mode '{mode}' not found for plotting windrose.")
+        if bin_size is None and N_bins is None:
+            bin_size = 15
+        roses.windrose(df, mode=mode, palette=palette, bin_size=bin_size, N_bins=N_bins).savefig(filename)
+        if verbose:
+            print(f"Saved windrose (boom: {boom}, mode: {mode}) to {filename}.")
+    
+    def stack_windrose(self, boom: str, filename: str):
+        pass
 
     @staticmethod
     def load(filename: str) -> MetTower:
@@ -345,3 +418,4 @@ class MetTower:
 # note to self: use .zst compression
 # need a way to account for shadowing in Boom.merge (will look @ hudson's code)
 # add functionality to convert Boom winds between polar and cartesian (methods would need to account for this)?
+# should fix atmo_calc.local_gravity and possibly incorporate into bulk Ri calculation

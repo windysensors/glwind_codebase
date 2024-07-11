@@ -7,12 +7,12 @@ Information
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
 **Last Update:** 9 July 2024  
-This package contains code for handling and analyzing certain types of meteorological tower (met tower) data.
+This package contains code for handling and analyzing certain types of meteorological tower (met tower) data.  
+Note: this package, as well as its documentation in this README file, are still in early development.  
 
 
 Getting started
 ---------------
-
 
 ### Installation:
 
@@ -31,12 +31,16 @@ You should now be able to access the contents of the package systemwide. If the 
     * First, in the codebase directory call `pwd` to see its full absolute path, e.g. /home/user/directory/glwind_codebase
     * Now, add `export PYTHONPATH=``<absolute_path_here``>:$PYTHONPATH` to the end of your .bashrc file (a hidden file; may be located in the home directory ~/.bashrc, or possibly in /etc/.bashrc).
 
+
 ### Package contents:
 
 * `atmo_calc.py` (windprofiles.atmo_calc module) has various helpful functions for atmosphere-related calculations.  
 * `stat_calc.py` (windprofiles.stat_calc module) has some statistical functions, including functions for angular averaging and multiple forms of least squares regression.
-* `objects.py` (windprofiles.objects module) defines Boom and MetTower objects.  
-* `exceptions.py` (windprofiles.exceptions module) defines a few custom exception types.
+* `objects.py` (windprofiles.objects module) defines the Boom and MetTower objects.  
+* `roses.py` (windprofiles.roses module) has functionality for plotting several types of windroses.  
+* `temporal.py` (windprofiles.temporal module) defines temporal classification schemes for seasonal- and other time-based- stratification of data, especially for plotting purposes.  
+* `units.py` (windprofiles.units module) defines the Quantity object and allows for basic unit conversion handling.
+* `exceptions.py` (windprofiles.exceptions module) defines a few custom exception types.  
 * `setup.py` and `__init__.py` can be ignored for basic use. If making updates to the package, they must be changed for versioning: most importantly, newly created python files should be listed in the py_modules variable of `setup.py` and imported in `__init__.py`.  
 
 
@@ -99,9 +103,10 @@ The core parts of this package are the `Boom` and `MetTower` classes. A Boom con
 
 ```
 
+
 ### On units:
 
-`units.py` has some basic unit handling functionality, primarily based on a Quantity object class. Quantities can be converted between different units of pressure, temperature, and speed (as well as from percent<->decimal [for relative humidity] and between reference directions [for wind direction]). See supported_units.txt for a comprehensive list of supported units.  
+`units.py` has some basic unit handling functionality, primarily based on a Quantity object class. Quantities can be converted between different units of pressure, temperature, and speed (as well as from percent<->decimal [for relative humidity] and between reference directions [for wind direction]). See `docs/supported_units.txt` for a comprehensive list of supported units.  
 At least for now, all data is stored internally in a common unit system (see `windprofiles.units.defaults`):  
 * Pressure in kPa  
 * Temperature in K  
@@ -118,3 +123,33 @@ The primary use of the conversion system, besides being available for user use, 
 Objects
 --------
 
+### Boom (windprofiles.objects.Boom)
+
+
+### MetTower (windprofiles.objects.MetTower)
+
+
+### Quantity (windprofiles.units.Quantity)
+
+
+### TerrainClassifier (windprofiles.atmo_calc.TerrainClassifier)
+
+
+### Selector (windprofiles.temporal.Selector)
+
+
+Visualization
+-------------
+
+### Wind roses
+
+A few types of wind roses can be generated using the windprofiles.roses module.
+
+
+### Wind profiles
+
+
+Credits
+--------
+
+The windrose plotting functionality is built based on [code by Paul Hobson](https://gist.github.com/phobson/41b41bdd157a2bcf6e14).

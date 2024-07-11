@@ -1,9 +1,10 @@
 ### atmo_calc.py ###
 # author: Elliott Walker
 # last update: 9 July 2024
-# description: functions for atmosphere-related calculations
+# description: Functions for atmosphere-related calculations
 
 import numpy as np
+import math
 from exceptions import *
 
 LOCAL_GRAVITY_DEFAULT = 9.802 # local gravity at Cedar Rapids (latitude ~ 42 degrees, elevation ~ 247 m), in m/s^2
@@ -57,7 +58,6 @@ def wind_components(speed: float, direction: float) -> tuple[float, float]:
 # wd(1/2): wind direction, degrees E of N
 # g [OPT]: local gravity, m/s^2
 def bulk_richardson_number(vpt1: float, vpt2: float, z1: float, z2: float, ws1: float, ws2: float, wd1: float, wd2: float, g: float=LOCAL_GRAVITY_DEFAULT) -> float:
-    g = LOCAL_GRAVITY
     delta_vpt = vpt2 - vpt1
     delta_z = z2 - z1
     u1, v1 = wind_components(ws1, wd1)
