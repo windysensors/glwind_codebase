@@ -20,27 +20,28 @@ To use the contents of `windprofiles`, the package must be installed. Start from
 1. From the codebase directory, run `pip install -e windprofiles`.  
     * This installs the package in editing mode, so changes made should be reflected in new imports.  
 2. Add the codebase directory to your PYTHONPATH environment variable.  
-    * On Windows: `set PYTHONPATH=%CD%;%PATH%`  
-    * On Linux/MacOS: `export PYTHONPATH=$(pwd):$PYTHONPATH`  
+    * On Windows, from Command Prompt (CMD): `set %PYTHONPATH%=%PATH%;%CD%`
+    * On Windows, from Powershell (PS): ``$env:PYTHONPATH=$env:PYTHONPATH`;$($pwd)``  
+    * On Linux/MacOS, from Bash: `export PYTHONPATH=$(pwd):$PYTHONPATH`  
 
 You should now be able to access the contents of the package systemwide. If the package is modified, make sure to reinstall in order to keep the pip package up-to-date.  
 
 > This will only add the directory to PYTHONPATH for your current shell. To make this change permanent, do the following so that a new shell will have the variable already set:
-* On Windows, from Command Prompt (CMD): `setx PYTHONPATH %PYTHONPATH%;%CD%`
-* On Windows, from Powershell (PS): `setx PYTHONPATH $env:PYTHONPATH;$($pwd.Path)`
-* On Linux/MacOS:
-    * First, in the codebase directory call `pwd` to see its full absolute path, e.g. /home/user/directory/glwind_codebase
-    * Now, add `export PYTHONPATH=``<absolute_path_here``>:$PYTHONPATH` to the end of your .bashrc file (a hidden file; may be located in the home directory ~/.bashrc, or possibly in /etc/.bashrc).
+* On Windows, from Command Prompt (CMD): `setx PYTHONPATH %PYTHONPATH%;%CD%`  
+* On Windows, from Powershell (PS): ``setx PYTHONPATH $env:PYTHONPATH`;$($pwd)``  
+* On Linux/MacOS, from Bash:  
+    * First, in the codebase directory call `pwd` to see its full absolute path, e.g. /home/user/directory/glwind_codebase  
+    * Now, add `export PYTHONPATH=$PYTHONPATH:<absolute_path_here>` to the end of your .bashrc file (a hidden file; may be located in the home directory ~/.bashrc, or possibly in /etc/.bashrc)  
 
 
 ### Package contents:
 
 * `atmo_calc.py` (windprofiles.atmo_calc module) has various helpful functions for atmosphere-related calculations.  
-* `stat_calc.py` (windprofiles.stat_calc module) has some statistical functions, including functions for angular averaging and multiple forms of least squares regression.
+* `stat_calc.py` (windprofiles.stat_calc module) has some statistical functions, including functions for angular averaging and multiple forms of least squares regression.  
 * `objects.py` (windprofiles.objects module) defines the Boom and MetTower objects.  
 * `roses.py` (windprofiles.roses module) has functionality for plotting several types of windroses.  
 * `temporal.py` (windprofiles.temporal module) defines temporal classification schemes for seasonal- and other time-based- stratification of data, especially for plotting purposes.  
-* `units.py` (windprofiles.units module) defines the Quantity object and allows for basic unit conversion handling.
+* `units.py` (windprofiles.units module) defines the Quantity object and allows for basic unit conversion handling.  
 * `exceptions.py` (windprofiles.exceptions module) defines a few custom exception types.  
 * `setup.py` and `__init__.py` can be ignored for basic use. If making updates to the package, they must be changed for versioning: most importantly, newly created python files should be listed in the py_modules variable of `setup.py` and imported in `__init__.py`.  
 
