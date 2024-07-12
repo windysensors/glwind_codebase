@@ -6,7 +6,7 @@ Information
 
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
-**Last Update:** 9 July 2024  
+**Last Update:** 12 July 2024  
 This package contains code for handling and analyzing certain types of meteorological tower (met tower) data.  
 Note: this package, as well as its documentation in this README file, are still in early development.  
 
@@ -26,7 +26,8 @@ To use the contents of `windprofiles`, the package must be installed. Start from
 You should now be able to access the contents of the package systemwide. If the package is modified, make sure to reinstall in order to keep the pip package up-to-date.  
 
 > This will only add the directory to PYTHONPATH for your current shell. To make this change permanent, do the following so that a new shell will have the variable already set:
-* On Windows: `setx PYTHONPATH %CD%;%PATH%`
+* On Windows, from Command Prompt (CMD): `setx PYTHONPATH %PYTHONPATH%;%CD%`
+* On Windows, from Powershell (PS): `setx PYTHONPATH $env:PYTHONPATH;$($pwd.Path)`
 * On Linux/MacOS:
     * First, in the codebase directory call `pwd` to see its full absolute path, e.g. /home/user/directory/glwind_codebase
     * Now, add `export PYTHONPATH=``<absolute_path_here``>:$PYTHONPATH` to the end of your .bashrc file (a hidden file; may be located in the home directory ~/.bashrc, or possibly in /etc/.bashrc).
