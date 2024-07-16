@@ -7,7 +7,11 @@ Information
 
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
+<<<<<<< HEAD
 **Last Update:** 16 July 2024
+=======
+**Last Update:** 12 July 2024
+>>>>>>> cf45a9e4d85149efaa417a2c22f7d0504c00486c
 This is a repository of the code and data used in the [Summer 2024 GLWind REU](https://engineering.csuohio.edu/glwind_reu/glwind_reu) program. It was designed both for our own use and to allow others in the future to more easily build upon our work. The majority of this repository is dedicated to the code first used for analysis on a dataset from Cedar Rapids, Iowa for the project *Wind profile characterization based on surface terrain and atmospheric thermal stability*.  
 
 Repository contents
