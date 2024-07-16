@@ -17,7 +17,8 @@ setup(
         'numpy',
         'pandas',
         'matplotlib',
-        'seaborn'
+        'seaborn',
+        'tqdm'
     ],
     author='Elliott Walker',
     author_email='walker.elliott.j@gmail.com',

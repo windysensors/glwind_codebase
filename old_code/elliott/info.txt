@@ -1,0 +1,10 @@
+Original workflow here:
+combine -> reduce -> (plots, profiles, windroses)
+
+Information (* - library):
+combine.py - load data (accounting for the weird formatting), merge into one nicely formatted dataframe
+reduce.py - outlier removal, resampling, compute derived quantities, perform stability + terrain classifications
+*helper_functions.py - useful functions for calculations
+windroses.py - generate various windroses
+profiles.py - generate wind profile plots
+plots.py - generate other plots

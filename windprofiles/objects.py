@@ -10,10 +10,15 @@ import stat_calc
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import image as mpimg
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 import atmo_calc
 import traceback
 import roses
 import os
+import sys
+from tqdm import tqdm
 from exceptions import *
 
 # helper function for initializing Boom class: renames columns and converts their units
@@ -37,6 +42,20 @@ def _timeName(df, oldName, hid) -> None:
     df['time'] = pd.to_datetime(df['time']) # convert to common pandas DateTime type
     df.set_index('time', inplace=True)
     df.sort_index(inplace=True)
+
+# add images as textures in 3d space
+def _add_image(ax, img_path, height, z_offset):
+    img = mpimg.imread(img_path)
+    img_height, img_width, _ = img.shape
+
+    x = np.linspace(-img_width/200, img_width/200, img_width)
+    y = np.linspace(-img_height/200, img_height/200, img_height)
+    x, y = np.meshgrid(x, y)
+    z = np.full_like(x, z_offset)
+
+    ax.plot_surface(x, y, z, rstride=1, cstride=1, facecolors=img, shade=False)
+    
+    return
 
 # Boom object class
 # Structure for holding time-series data from a single met tower boom (pd.DataFrame underlying)
@@ -167,7 +186,9 @@ class Boom:
             eliminations += df[outliers].shape[0]
             df = df[~outliers]
         if verbose:
-            print(f'{eliminations} outliers eliminated ({100*eliminations/(df.shape[0]+eliminations):.4f}%)')
+            print(f'Outlier elimination performed on boom @{self.hid}m.')
+            if eliminations > 0:
+                print(f'\t{eliminations} outliers eliminated ({100*eliminations/(df.shape[0]+eliminations):.4f}%)')
         note = f"Outlier removal performed (n_samples = {n_samples}, sigma = {sigma}), removing {eliminations} values"
         if inplace:
             if add_note:
@@ -191,9 +212,9 @@ class Boom:
         df_avg.drop(columns=['u','v'],inplace=True)
         note = f'Resampled (n_samples = {n_samples})'
         if verbose:
-            if eliminations > 0:
-                print(f'{eliminations} blank row(s) removed')
             print(note)
+            if eliminations > 0:
+                print(f'\t{eliminations} blank row(s) removed')
         if inplace:
             self._data = df_avg
             if add_note:
@@ -370,10 +391,13 @@ class MetTower:
         plt.savefig(filename)
         plt.close()
         
-    def powerlaw_all(self):
+    def compute_powerlaws(self, canon: bool=False):
         pass
 
-    def powerlaw_stratified(self):
+    def compute_averages(self):
+        pass
+
+    def compute_average_powerlaws(self):
         pass
 
     def compute_vpt(self, verbose: bool=False) -> None:
@@ -389,12 +413,21 @@ class MetTower:
         if longitude:
             self.longitude = longitude
 
-    def save_windrose(self, boom: str, filename: str, mode: str='speed', palette=None, bin_size: int=None, N_bins: int=None, verbose: bool=False):
+    def save_windrose(self, boom: str, filename: str, mode: str='speed', palette=None, canon: bool=False, bin_size: int=None, N_bins: int=None, verbose: bool=False, warnings: bool=True):
         if boom == 'all':
             return # FIX
         if mode.lower() == 'speed':
             df = self.booms[boom]._data[['ws','wd']]
+            if canon:
+                if not self.has_canonical_time:
+                    raise AvailabilityError(f"Could not plot speed windrose for MetTower '{self.name}' with setting canon=True: no associated canonical time.")
+                before_elim = len(df)
+                df = pd.concat([df, self._data.set_index('time')], axis=1, join='inner')
+                if verbose:
+                    print(f'{before_elim - len(df)} points ignored due to setting canon=True.')
         elif mode.lower() == 'ri':
+            if canon and warnings:
+                print("Warning: setting canon=True is redundant, as mode='ri' already takes canonical time.")
             if not self.has_canonical_time:
                 raise AvailabilityError(f"Could not plot Ri windrose for MetTower '{self.name}': no associated canonical time.")
             if not 'ri' in self._data.columns:
@@ -404,12 +437,41 @@ class MetTower:
             raise ModeNotFound(f"Mode '{mode}' not found for plotting windrose.")
         if bin_size is None and N_bins is None:
             bin_size = 15
-        roses.windrose(df, mode=mode, palette=palette, bin_size=bin_size, N_bins=N_bins).savefig(filename)
+        fig = roses.windrose(df, mode=mode, palette=palette, bin_size=bin_size, N_bins=N_bins)
+        fig.savefig(filename)
+        plt.close(fig)
         if verbose:
             print(f"Saved windrose (boom: {boom}, mode: {mode}) to {filename}.")
     
-    def stack_windrose(self, boom: str, filename: str):
-        pass
+    def show_windstack(self, which_booms: list[str]=None, canon: bool=False, verbose: bool=False, warnings: bool=True):
+        # DOES NOT WORK
+        if which_booms is None:
+            which_booms = list(self.booms.keys())
+        locs = []
+        heights = []
+        for n, bname in enumerate(which_booms):
+            if bname in self.booms.keys():
+                loc = f'TEMP_{n}.png'
+                self.save_windrose(bname, f'TEMP_{n}.png')
+                locs.append(loc)
+                heights.append(self.booms[bname].height)
+            elif warnings:
+                print(f"Warning: in windrose stack-plot for MetTower '{self.name}', could not find Boom '{bname}' - skipping.")
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        zipd = zip(locs, heights)
+        if verbose:
+            zipd = tqdm(zipd)
+        for loc, height in zipd:
+            _add_image(ax, loc, height, height)
+            os.remove(loc)
+
+        ax.set_zlabel('z')
+        ax.set_zlim(0, max(heights)*1.05)
+
+        plt.show()
 
     @staticmethod
     def load(filename: str) -> MetTower:

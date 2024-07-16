@@ -8,7 +8,7 @@ from atmo_calc import TerrainClassifier
 from units import Quantity
 import os
 
-VERBOSE = False
+VERBOSE = True
 
 # terrain classification based on wind direction for Cedar Rapids, Iowa met tower
 # boundaries based on work in Ahlman-Zhang-Markfort manuscript
@@ -128,6 +128,8 @@ cedarRapidsTower.resample(n_samples=10, verbose=VERBOSE)
 cedarRapidsTower.compute_vpt(verbose=VERBOSE)
 cedarRapidsTower.associate_canonical_time(which_booms=['10m','106m'], verbose=VERBOSE)
 cedarRapidsTower.compute_ri('10m','106m', verbose=VERBOSE)
-cedarRapidsTower.save_windrose('10m', 'PLOTS/10mRose.png', mode='speed', verbose=VERBOSE)
+cedarRapidsTower.classify_stability(verbose=VERBOSE)
+cedarRapidsTower.save_windrose('10m', 'PLOTS/10mRose.png', mode='speed', canon=True, verbose=VERBOSE)
 cedarRapidsTower.save_windrose('10m', 'PLOTS/riRose.png', mode='ri', verbose=VERBOSE)
 cedarRapidsTower.save_stabilities('PLOTS/stabilitiesBar.png', verbose=VERBOSE)
+cedarRapidsTower.show_windstack(which_booms = ['6m','10m','20m','32m','106m'], verbose=VERBOSE)
