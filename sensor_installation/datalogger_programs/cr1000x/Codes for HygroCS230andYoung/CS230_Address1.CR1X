@@ -1,0 +1,29 @@
+' Program: CS230_Address1
+' Author: Chloe Amoroso
+' Last Update: July 18, 2024
+' Description: This program communicates with an SDI-12 sensor connected to 
+'   the SDI-12 port of a data logger. It checks the current address of the 
+'   sensor and changes it from 0 to 1 if it is set to 0.
+' Usage: This code is necessary to run the program "HygroCS230Young"
+' Dependencies: None
+' Wiring Configurations: [Red = 12V], [White = C1], [Clear, Blue, Black = G]
+
+'Declare variables
+Public SensorResponse As String * 20
+
+'Specify the SDI-12 port the sensor is connected to
+Const SDIPort = C1
+
+'Begin program
+BeginProg
+
+  'Query the current address
+  SDI12Recorder(SensorResponse(), SDIPort, "0", "?!", 0, 0)
+  
+  'If the current address is 0, change it to 1
+  If SensorResponse(1,1) = "0" Then
+    SDI12Recorder(SensorResponse(), SDIPort, "0", "A1!", 0, 0)
+  EndIf
+
+EndProg
+
