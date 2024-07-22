@@ -1,0 +1,153 @@
+'CR350 Series Datalogger
+
+'Cleveland State University program for MetSENS500 RS232
+'Authors: Youssef Mostafa with guidance from Garrison Sagers 3/29/2024
+
+'Declare Variables and Units
+Dim WSStr As String * 60
+Dim ByteRet
+Dim ChkSumF As Boolean
+Dim MSData(9)
+
+Const MagDeclination = 10.24 'Cleveland OH magnetic declination
+
+' Initialize variables for collection:
+Public WindDir_UC 'Uncorrected wind direction
+Public WindDir_CC 'Compass corrected wind direction
+Public WindDir_True 'Wind direction corrected by compass and magnetic declination
+Public Wind_Speed 'Wind speed
+Public BP 'Barometric pressure
+Public RH 'Relative humidity
+Public AirTemp 'Air temperature
+Public DP  'Dewpoint
+Public MetSENS_Volts
+Public MetSENS_Status As Long 'Status code of MetSENS
+Dim N(9) As Long
+' The following two are internal to the datalogger
+Public BattV
+Public PTemp
+
+' Error codes (for fault detection)
+Alias N(1)=Good_Sample 'No fault, good samples
+Alias N(2)=Fault_Wind 'Wind fault
+Alias N(3)=Fault_Temperature 'Temperature fault
+Alias N(4)=Fault_Dewpoint 'Dewpoint fault
+Alias N(5)=Fault_Humidity 'Humidity fault
+Alias N(6)=Fault_Pressure 'Pressure sensor warning
+Alias N(7)=Fault_Compass 'Compass fault
+Alias N(8)=Fault_Undefined  'Undefined fault
+Alias N(9)=Fault_Checksum 'Checksum error
+
+' Set up units
+Units WindDir_UC= Deg
+Units WindDir_CC = Deg
+Units WindDir_True = Deg
+Units Wind_Speed=m/s
+Units BP = hPa
+Units RH = %
+Units AirTemp = Deg C
+Units DP = Deg C
+Units MetSENS_Volts = V
+Units MetSENS_Status=unitless
+
+Units BattV= V
+Units PTemp= Deg C
+
+
+'Define Data Tables
+DataTable (TenSecond,True,-1 )
+  ' Data interval syntax: (TintoInt, Interval, Units, Lapses)
+  ' E.g. (5, 60, Sec, x) collects data every 60 seconds, with 5 sec offset: that being
+  ' an offset 5 seconds into each minute of the hour
+  ' Lapses is for logging discontinuity. Setting this to 0 stores timestamp for every record.
+  DataInterval (0,10,Sec,10)
+  WindVector (1,Wind_Speed,WindDir_True,IEEE4,WindDir_True = NAN,0,0,1)
+  FieldNames ("Wind_Speed_avg,WindDir_avg")
+  Sample (1,BP,IEEE4)
+  Sample (1,RH,FP2)
+  Average (1,AirTemp,FP2,AirTemp = NAN)
+  Sample (1,DP,FP2)
+  Sample (1,MetSENS_Status,Long)
+  Totalize (1,Good_Sample,Long,False)
+EndTable
+
+DataTable (Daily,True,-1)
+  DataInterval(0,1,day,10)
+  Maximum (1,AirTemp,FP2,AirTemp = NAN,True)
+  Minimum (1,AirTemp,FP2,AirTemp = NAN,True)
+  Sample (1,PTemp,FP2)
+  Minimum(1,BattV,FP2,False,False)
+EndTable
+
+'Main Program
+BeginProg
+  'Open COMC1 for communications with the MetSENS500
+  SerialOpen(Com1,9600,3,0,301)
+  SW12 (SW12_1,1 )
+  SW12 (SW12_2,1 )
+  
+
+  'Main Scan
+  Scan(1,Sec,1,0)
+    'Default CR350 Datalogger Battery Voltage measurement 'BattV'
+    Battery(BattV)
+    'Default CR350 Datalogger Wiring Panel Temperature measurement 'PTemp'
+    PanelTemp(PTemp,60)
+
+    'MetSENS500 multiparameter weather sensor
+    ' Get the data from the serial buffer
+    SerialInRecord(Com1,WSStr,&h02,0,&h0D0A,ByteRet,01)
+    ' Use checksum to verify the integrity of the data message
+    ChkSumF=HexToDec(Right(WSStr,2)) Eqv CheckSum(WSStr,9,Len(WSStr)-3)
+    If NOT ChkSumF Then WSStr = NAN
+    ' Parse the data string
+    SplitStr(MSData(),WSStr,",",9,4)
+    WindDir_UC=MSData(1)
+    Wind_Speed=MSData(2)
+    WindDir_CC=MSData(3)
+    BP=MSData(4)
+    RH=MSData(5)
+    AirTemp=MSData(6)
+    DP=MSData(7)
+    MetSENS_Volts=MSData(8)
+    MetSENS_Status=MSData(9)
+
+    ' Set diagnostic variables as needed
+    If ByteRet=0 Then MetSENS_Status=NAN
+    Move(Good_Sample,9,0,1)
+    Select Case MetSENS_Status
+    Case=0
+      Good_Sample=1
+    Case=1
+      Fault_Wind=1
+    Case=10
+      Fault_Temperature=1
+    Case=20
+      Fault_Dewpoint=1
+    Case=40
+      Fault_Humidity=1
+    Case=80
+      Fault_Pressure=1
+    Case=100
+      Fault_Compass=1
+    Else
+      Fault_Undefined=1
+    EndSelect
+    If NOT (ByteRet<>0 IMP ChkSumF) Then Fault_Checksum=1
+
+    ' Calculate the true wind direction
+    If WindDir_UC <> NAN AND Good_Sample = 1 AND Fault_Checksum = 0 Then
+      'Wind measurement is good
+      '  Adding 360 handles the possibility of negative offsets
+      '  MOD 360 takes care of directions above 360
+      WindDir_True = (WindDir_CC + MagDeclination + 360) MOD 360
+    Else
+      WindDir_True = NAN
+    EndIf
+
+    'Call Data Tables and Store Data
+    CallTable TenSecond
+    CallTable Daily
+  NextScan
+EndProg
+
