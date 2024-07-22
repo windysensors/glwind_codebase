@@ -11,6 +11,8 @@ from tqdm import tqdm
 from datetime import datetime
 import helper_functions as hf
 import multiprocessing
+import signal
+import sys
 
 WINDS = ['Ux','Uy','Uz'] # Columns containing wind speeds, in order
 TEMPERATURES = ['Ts', 'amb_tmpr'] # Columns containing temperatures in C
@@ -253,7 +255,7 @@ def match_ri(df, # dataframe which we want to match ri to, based on its start & 
 
 
 def _analyze_file(args):
-    filename, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logparent, multiproc = args
+    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logparent, multiproc = args
 
     if multiproc:
         logger = logparent.sublogger()
@@ -310,6 +312,12 @@ def _analyze_file(args):
         logger.log(f'\tIntegral time scale = {i_time:.3f} s')
         logger.log(f'\tIntegral length scale = {i_length:.3f} m')
 
+def init_worker():
+    # Worker processes should ignore SIGINT and let the parent process handle it
+    def interrupt():
+        print('interrupt')
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGINT, interrupt)
 
 def analyze_directory(parent, 
                       *,
@@ -326,7 +334,7 @@ def analyze_directory(parent,
                       logger = Printer(),
                       nproc = 1
                       ):
-    
+
     logger.log(f'Beginning analysis of {parent}', timestamp = True)
     if type(nproc) is int and nproc > 1:
         logger.log(f'MULTIPROCESSING ENABLED: {nproc=}')
@@ -342,15 +350,21 @@ def analyze_directory(parent,
     else:
         df_match = None
 
-    arguments = (kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logger, multiproc)
+    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logger, multiproc)
     directory = [(filename, *arguments) for filename in os.listdir(parent)]
 
-    pool = multiprocessing.Pool(processes = nproc)
+    pool = multiprocessing.Pool(processes = nproc, initializer=init_worker)
 
-    pool.map(_analyze_file, directory)
-
-    pool.close()
-    pool.join()
+    try:
+        # Use pool.map to distribute the work
+        pool.map(_analyze_file, directory)
+    except KeyboardInterrupt: # need to get this to work; the init_worker initializer doesn't work as expected
+        print('KeyboardInterrupt - terminating pool')
+        pool.terminate()
+    else:
+        pool.close()
+    finally:
+        pool.join()
 
     logger.log(f'COMPLETED!', timestamp = True)
 
