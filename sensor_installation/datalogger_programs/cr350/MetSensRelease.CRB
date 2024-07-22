@@ -55,12 +55,12 @@ Units PTemp= Deg C
 
 
 'Define Data Tables
-DataTable (FifteenSecond,True,-1 )
+DataTable (TenSecond,True,-1 )
   ' Data interval syntax: (TintoInt, Interval, Units, Lapses)
   ' E.g. (5, 60, Sec, x) collects data every 60 seconds, with 5 sec offset: that being
   ' an offset 5 seconds into each minute of the hour
   ' Lapses is for logging discontinuity. Setting this to 0 stores timestamp for every record.
-  DataInterval (0,15,Sec,10)
+  DataInterval (0,10,Sec,10)
   WindVector (1,Wind_Speed,WindDir_True,IEEE4,WindDir_True = NAN,0,0,1)
   FieldNames ("Wind_Speed_avg,WindDir_avg")
   Sample (1,BP,IEEE4)
@@ -71,8 +71,8 @@ DataTable (FifteenSecond,True,-1 )
   Totalize (1,Good_Sample,Long,False)
 EndTable
 
-DataTable (TenMinute,True,-1)
-  DataInterval(0,10,Min,10)
+DataTable (Daily,True,-1)
+  DataInterval(0,1,day,10)
   Maximum (1,AirTemp,FP2,AirTemp = NAN,True)
   Minimum (1,AirTemp,FP2,AirTemp = NAN,True)
   Sample (1,PTemp,FP2)
@@ -146,8 +146,8 @@ BeginProg
     EndIf
 
     'Call Data Tables and Store Data
-    CallTable FifteenSecond
-    CallTable TenMinute
+    CallTable TenSecond
+    CallTable Daily
   NextScan
 EndProg
 

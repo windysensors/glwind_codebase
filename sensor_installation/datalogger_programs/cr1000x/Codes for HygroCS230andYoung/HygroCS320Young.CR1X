@@ -1,4 +1,4 @@
-' Program: HygroCS230Young
+' Program: HygroCS320Young
 ' Author: Chloe Amoroso, Elliot Walker
 ' Last Update: July 18, 2024
 ' Description: This program is designed for a Campbell Scientific CR1000X 
@@ -9,11 +9,13 @@
 '  wind, temperature, humidity, solar radiation, and system status data at 
 '  specified intervals.
 ' Usage: Program to directly run in CR1000X datalogger with RS-232 wiring 
-'  @ComC5) to Young 81000V and SDI-12 wiring (@ComC1 with CS230 address@1 and 
+'  @ComC5) to Young 81000V and SDI-12 wiring (@ComC1 with CS320 address@1 and 
 '  HygroVUE10 address@0)
-' Dependencies: young_config.CR1X (expected in CPU)
+' Dependencies: young_config.CR1X (expected in CPU). CS320 must have address@1
+'  and HygroVUE10 must have address@0 (may need to use codes CS320_Address1.CR1X
+'  and Htgro_Address0.CR1X)
 ' Wiring Configurations:
-' 	CS230: [Red = 12V], [White = C1], [Clear, Blue, Black = G]
+' 	CS320: [Red = 12V], [White = C1], [Clear, Blue, Black = G]
 '  	HygroVUE10: [Brown = 12V], [White = C1], [Clear, Black = G]
 '	  Young: [Red = 12V], [Blue, Black = G], [Orange = C5], [Yellow = C6], [Brown, Green, White = NOT CONNECTED] 
 
