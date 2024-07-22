@@ -1,0 +1,11 @@
+CO2			mg/m^3
+H2O			g/m^3
+Ts			C
+Ux			m/s
+Uy			m/s
+Uz			m/s
+Ambient Pressure	kPa
+Ambient Temperature	C	
+
+
+Note: Timestamps are in UTC

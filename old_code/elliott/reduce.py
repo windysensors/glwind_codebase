@@ -33,7 +33,7 @@ for h in heights:
     dirRad = np.deg2rad(df[f'wd_{h}m'])
     df[f'x_{h}m'] = df[f'ws_{h}m'] * np.sin(dirRad)
     df[f'y_{h}m'] = df[f'ws_{h}m'] * np.cos(dirRad)
-df_10_min_avg = df.resample('10T').mean()
+df_10_min_avg = df.resample('10min').mean()
 before_dropna = len(df_10_min_avg)
 df_10_min_avg.dropna(axis=0,how='all',inplace=True) # If any row is completely blank, drop it
 dropped = before_dropna - (len(df_10_min_avg))
@@ -55,7 +55,7 @@ df_10_min_avg['ri'] = df_10_min_avg.apply(lambda row: hf.bulk_richardson_number(
 df_10_min_avg['vpt_lapse_env'] = (df_10_min_avg['vpt_106m'] - df_10_min_avg['vpt_10m'])/96.
 
 # New stability classification scheme
-df_10_min_avg['new_stability'] = df_10_min_avg.apply(lambda row: hf.new_class(row['vpt_lapse_env']), axis=1).astype('category')
+# df_10_min_avg['new_stability'] = df_10_min_avg.apply(lambda row: hf.new_class(row['vpt_lapse_env']), axis=1).astype('category')
 
 # Drop any rows without Richardson number calculated
 df_10_min_avg.dropna(subset=['ri'],inplace=True)
