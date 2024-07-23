@@ -27,12 +27,28 @@ def virtual_potential_temperature(RH, P, T):
 def wind_components(speed, direction):
     # given a wind speed and a direction in degrees CW of N,
     # return u, v (eastward, northward) components of wind
-    if math.isnan(direction):
+    if math.isnan(direction) or speed == 0.:
         return 0., 0.
     direction_rad = np.radians(direction)
     u = speed * np.sin(direction_rad)
     v = speed * np.cos(direction_rad)
     return u, v
+
+def polar_wind(u, v):
+    # given u, v (east, north) components of wind,
+    # return wind speed, direction 
+    speed = np.sqrt(u*u+v*v)
+    direction = (np.rad2deg(np.arctan2(u,v)) + 360) % 360
+    return speed, direction
+
+def polar_average(magnitudes, directions):
+    # polar vector average (true-average)
+    radians = np.deg2rad(directions)
+    xs = magnitudes * math.cos(radians)
+    ys = magnitudes * math.sin(radians)
+    xavg = np.mean(xs)
+    yavg = np.mean(ys)
+    return polar_wind(xavg, yavg)
 
 def top_cond_avg(s1,s2,d1,d2,width=40):
     # Given speeds and uncorrected directions for booms 6 and 7 (6 in s1,d1, 7 in s2,d2),
@@ -114,7 +130,7 @@ def ls_linear_fit(xvals, yvals):
     xvals = list(xvals)
     yvals = list(yvals)
     if len(yvals) != len(xvals):
-        throw("Lists must be of equal size")
+        raise RuntimeError("Lists must be of equal size")
     for x, y in zip(xvals, yvals):
         if math.isnan(y):
             xvals.remove(x)
@@ -143,3 +159,12 @@ def power_fit(xvals, yvals, both=False):
     if both:
         return np.exp(lnA), B
     return B
+
+def mytest(u0=1.,v0=1.):
+    print(f'u = {u0:.3f}, v = {v0:.3f}')
+    speed, direction = polar_wind(u0,v0)
+    print(f'polar: speed = {speed:.3f}, direction = {direction:.3f} degrees CW of N')
+
+if __name__ == '__main__':
+    #mytest()
+    pass

@@ -1,4 +1,4 @@
-' Program: Hygro_Address0
+''' Hygro_Address0.CR1X '''
 ' Author: Chloe Amoroso
 ' Last Update: July 18, 2024
 ' Description: This CRBasic program communicates with an SDI-12 sensor 
