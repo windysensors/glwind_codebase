@@ -13,8 +13,9 @@ import helper_functions as hf
 import multiprocessing
 
 WINDS = ['Ux','Uy','Uz'] # Columns containing wind speeds, in order
-TEMPERATURES = ['Ts', 'amb_tmpr'] # Columns containing temperatures in C
-IGNORE = ['H2O', 'CO2', 'Ts', 'amb_tmpr', 'amb_press'] # Columns we don't care about
+TEMPERATURE = 'Ts' # Column with sonic temperature for fluxes
+TEMPS_C = ['Ts', 'amb_tmpr'] # Columns containing temperatures in C
+IGNORE = ['H2O', 'CO2', 'amb_tmpr', 'amb_press'] # Columns we don't care about
 
 class Logger:
     def __init__(self, logfile = 'output.log', pid = 0):
@@ -62,7 +63,7 @@ class Printer(Logger):
 
 # Loads dataframe: Handles timestamps, duplicate removal, column removal, and conversion.
 def load_frame(filepath, # location of the CSV file to load
-               kelvinconvert = TEMPERATURES, # columns which should be converted from C -> K
+               kelvinconvert = TEMPS_C, # columns which should be converted from C -> K
                ignore = IGNORE
                ):
 
@@ -194,7 +195,7 @@ def integral_scales(df, # dataframe containing original data
         if cutoff_index == 0:
             warn = True
             if logger:
-                logger.log(f'Warning: failed to find cutoff for integration (variable {col})')
+                logger.log(f'Warning - failed to find cutoff for integration (variable {col}).')
 
         i_time = np.sum(Raa.loc[:cutoff_index]) * dt
         i_length = i_time * abs(mean)
@@ -206,7 +207,7 @@ def integral_scales(df, # dataframe containing original data
 def save_scales(scales,
                 filename,
                 warn = False,
-                ri = None,
+                bulk_ri = None,
                 times = None,
                 order = WINDS,
                 align = False
@@ -223,8 +224,8 @@ def save_scales(scales,
         if times:
             f.write(times+'\n')
             
-        if ri:
-            f.write(ri+'\n')
+        if bulk_ri:
+            f.write(bulk_ri+'\n')
 
         vars = order if set(order) == set(scales.keys()) else scales.keys()
         for var in vars:
@@ -252,9 +253,7 @@ def match_ri(df, # dataframe which we want to match ri to, based on its start & 
     stability2 = hf.stability_class(median_ri)
     stability = stability1 if stability1 == stability2 else f'{stability1}/{stability2}'
 
-    ri_string = f'Bulk Ri: mean {mean_ri:.3f}, median {median_ri:.3f} ({stability})'
-
-    return ri_string
+    return mean_ri, median_ri, stability
 
 # Geometrically align the Ux and Uy components of wind such that Ux is oriented in the direction of the mean wind and Uy is in the crosswind direction
 def align_frame(df, components = WINDS[:2]):
@@ -306,8 +305,89 @@ def plot_data(df,
 
     return
 
+def compute_fluxes(df, winds = WINDS, temp = TEMPERATURE):
+
+    ucol, vcol, wcol = winds
+
+    mean_u = np.mean(df[ucol])
+    mean_v = np.mean(df[vcol])
+    mean_w = np.mean(df[wcol])
+    mean_T = np.mean(df[temp])
+
+    flux_u = df[ucol] - mean_u
+    flux_v = df[vcol] - mean_v
+    flux_w = df[wcol] - mean_w
+    flux_T = df[temp] - mean_T
+
+    eddy_uMomt_flux = flux_w * flux_u
+    eddy_vMomt_flux = flux_w * flux_v
+    eddy_heat_flux = flux_w * flux_T
+
+    dff = pd.DataFrame(data = {"w'u'" : eddy_uMomt_flux, "w'v'" : eddy_vMomt_flux, "w'T'" : eddy_heat_flux},
+                       index = df.index,
+                       copy = True)
+    
+    mean_eddy_uMomt_flux = np.mean(eddy_uMomt_flux)
+    mean_eddy_vMomt_flux = np.mean(eddy_vMomt_flux)
+    mean_eddy_heat_flux = np.mean(eddy_heat_flux)
+    u_star = (mean_eddy_uMomt_flux**2 + mean_eddy_vMomt_flux**2)**(1/4)
+
+    derived = dict()
+    derived['Mean eddy u momentum flux'] = mean_eddy_uMomt_flux
+    derived['Mean eddy v momentum flux'] = mean_eddy_vMomt_flux
+    derived['Mean eddy heat flux'] = mean_eddy_heat_flux
+    derived['Friction velocity'] = u_star
+    derived['Obukhov length'] = hf.obukhov_length(u_star, mean_T, mean_eddy_heat_flux)
+    derived['Flux Ri'] = hf.flux_richardson(mean_eddy_uMomt_flux, mean_T, mean_eddy_heat_flux, u_star)
+    
+    return dff, derived
+
+def plot_flux(fluxes, title = 'Flux Plot', saveto = None):
+    starttime = fluxes.index[0]
+    deltatime = fluxes.index - starttime
+    deltaseconds = deltatime.days * 24 * 3600 + deltatime.seconds + deltatime.microseconds/1e6
+
+    fig, ax = plt.subplots(1, 1, sharex = True)
+    fig.suptitle(title, fontweight = 'bold')
+
+    for flux in fluxes.columns:
+        ax.plot(deltaseconds, fluxes[flux], label = str(flux), linewidth=1)
+
+    ax.set_ylabel('Flux')
+    ax.set_xlabel('Seconds since {startime}')
+    ax.legend()
+
+    fig.tight_layout(pad = 1)
+
+    if saveto is None:
+        plt.show()
+    else:
+        plt.savefig(saveto, bbox_inches='tight')
+    plt.close()
+
+    return
+
+def save_flux(derived, filename, bulk_ri = None):
+    
+    with open(filename, 'w') as f:
+
+        if bulk_ri:
+            f.write(bulk_ri+'\n')
+        
+        for var, value in derived.items():
+            f.write(f'{var}: {value:.4f}\n')
+    
+    return
+
+def append_ri(bulkMean, bulkMedian, flux, filename):
+
+    with open(filename, 'a') as f:
+        f.write(f'{bulkMean:.6f},{bulkMedian:.6f},{flux:.6f}\n')
+
+    return
+
 def _analyze_file(args):
-    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, logparent, multiproc = args
+    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, rifile, logparent, multiproc = args
 
     if multiproc:
         logger = logparent.sublogger()
@@ -354,7 +434,8 @@ def _analyze_file(args):
 
     ri_string = None
     if df_match is not None:
-        ri_string = match_ri(df, df_match)
+        mean_ri, median_ri, stability = match_ri(df, df_match)
+        ri_string = f'Bulk Ri: mean {mean_ri:.4f}, median {median_ri:.4f} ({stability})'
         logger.log(ri_string)
 
     df_autocorr = compute_autocorrs(df, autocols = autocols, maxlag = maxlag, logger = logger)
@@ -377,6 +458,21 @@ def _analyze_file(args):
         plot_autocorrs(df_autocorr, title = f'{name} Autocorrelations', saveto = fpath, threshold=threshold)
         logger.log(f'Saved autocorrelation plots to {fpath}')
 
+    if plotflux or saveflux:
+        fluxes, derived = compute_fluxes(df, winds = WINDS, temp = TEMPERATURE)
+
+    if plotflux:
+        fname = 'fluxes.png'
+        fpath = os.path.abspath(os.path.join(intermediate, fname))
+        plot_flux(fluxes, title = f'{name} Fluxes', saveto = fpath)
+
+    if saveflux:
+        fname = 'flux_calculations.txt'
+        fpath = os.path.abspath(os.path.join(intermediate, fname))
+        save_flux(derived, filename = fpath, bulk_ri = ri_string)
+        if df_match is not None:
+            append_ri(mean_ri, median_ri, derived['Flux Ri'], filename = rifile)
+
     if savescales:
         if align:
             fname = 'aligned_integralscales.txt'
@@ -384,7 +480,7 @@ def _analyze_file(args):
             fname = 'integralscales.txt'
         scales, warn = integral_scales(df, df_autocorr, cols = list(set(WINDS)&set(autocols)), threshold = threshold)
         fpath = os.path.abspath(os.path.join(intermediate,fname))
-        save_scales(scales, filename = fpath, warn = warn, ri = ri_string, times = time_string, align = align)
+        save_scales(scales, filename = fpath, warn = warn, bulk_ri = ri_string, times = time_string, align = align)
         logger.log(f'Saved info to {fpath}')
 
     for var, s in scales.items():
@@ -395,7 +491,7 @@ def _analyze_file(args):
     
 def analyze_directory(parent, 
                       *,
-                      kelvinconvert = TEMPERATURES,
+                      kelvinconvert = TEMPS_C,
                       autocols = WINDS,
                       maxlag = 0.5,
                       threshold = 0.25,
@@ -405,11 +501,18 @@ def analyze_directory(parent,
                       savecopy = True,
                       plotdata = True,
                       plotautocorrs = True,
+                      plotflux = True,
                       saveautocorrs = True,
                       savescales = True,
+                      saveflux = True,
+                      rifile = None,
                       logger = Printer(),
                       nproc = 1
                       ):
+    
+    if align and saveflux and (rifile is not None) and (matchfile is not None):
+        with open(rifile, 'w') as f:
+            f.write('bulk_mean,bulk_median,flux\n')
 
     logger.log(f'Beginning analysis of {parent}', timestamp = True)
     if type(nproc) is int and nproc > 1:
@@ -426,7 +529,7 @@ def analyze_directory(parent,
     else:
         df_match = None
 
-    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, logger, multiproc)
+    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, rifile, logger, multiproc)
     directory = [(filename, *arguments) for filename in os.listdir(parent)]
 
     pool = multiprocessing.Pool(processes = nproc)
@@ -454,13 +557,14 @@ if __name__ == '__main__':
         description = 'Analyzes chunks of sonic data',
     )
 
-    parser.add_argument('-a', '--align', action = 'store_true', help = 'geometrically align Ux in the direction of the mean horizontal wind?')
     parser.add_argument('-c', '--clear', action = 'store_true', help = 'clear the target directory?')
     parser.add_argument('-y', '--yes', action = 'store_true', help = 'do not confirm before clearing?')
     parser.add_argument('-d', '--data', default = '../../DATA/KCC_106m_Flux_Tower_Data', help = 'input data directory')
     parser.add_argument('-t', '--target', default = 'sonic_results',  help = 'output target directory')
     parser.add_argument('-m', '--match', default = 'ten_minutes_labeled.csv', help = 'file containing bulk Ri to match')
     parser.add_argument('--nomatch', action = 'store_true', help = 'do not perform Ri match?')
+    parser.add_argument('--noflux', action = 'store_true', help = 'do not perform flux calculations?')
+    parser.add_argument('--noalign', action = 'store_true', help = 'do not geometrically align Ux in the direction of the mean horizontal wind?')
     parser.add_argument('-n', '--nproc', default = 1, help = 'number of CPUs to run; sets verbose to False')
     parser.add_argument('-s', '--silent', action = 'store_true', help = 'neither print nor log?')
     group = parser.add_mutually_exclusive_group()
@@ -469,8 +573,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    align = args.align
+    align = not args.noalign
     nomatch = args.nomatch
+    flux = not args.noflux
     parent = args.data
     savedir = args.target
     matchfile = args.match
@@ -519,6 +624,10 @@ if __name__ == '__main__':
                 logfile = f'./{logfile}'
         logfile = os.path.abspath(logfile)
         logger = Logger(logfile = logfile)
+    
+    if flux and not align:
+        flux = False
+        logger.log('Warning - noalign is True, so flux calculations will not be carried out.')
 
     analyze_directory(parent = parent,
                       maxlag = 0.5,
@@ -526,6 +635,9 @@ if __name__ == '__main__':
                       matchfile = matchfile,
                       align = align,
                       savedir = savedir,
+                      plotflux = flux,
+                      saveflux = flux,
+                      rifile = os.path.join(savedir, 'richardson.csv'),
                       logger = logger,
                       nproc = int(args.nproc)
                       )

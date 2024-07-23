@@ -6,6 +6,38 @@ import math
 
 LOCAL_GRAVITY = 9.802 # local gravity at Cedar Rapids (latitude ~ 42 degrees, elevation ~ 247 m), in m/s^2
 
+k = 0.4 # von Karman constant. Between 0.35-0.42, some use 0.35 while Stull uses 0.4
+z = 2. # sensor at 2 meters
+# note - for fluxes, taking theta_v ~ T locally (set reference = values @ 2 m)
+
+# coefficients for dimensionless wind shear computation
+ALPHA = 4.7
+BETA = 15.
+
+def obukhov_length(u_star, T_bar, Q_0, g = LOCAL_GRAVITY):
+    # u_start is friciton velocity, T_bar is mean temperature,
+    # Q_0 is mean turbulent vertical heat flux
+    L = -u_star**3 * T_bar / (k * g * Q_0)
+    return L
+
+def phi(z_over_L):
+    # Dimensionless wind shear function
+    if z_over_L >= 0: # stable
+        # case z/L == 0 is neutral, returns 1 in either formula
+        return 1 + ALPHA * z_over_L
+    # otherwise, unstable
+    return (1 - BETA * z_over_L)**(-1/4)
+
+def wind_gradient(u_star, T_bar, Q_0):
+    # uses Businger-Dyer relationship to estimate the vertical gradient of horizontal wind speed, du/dz
+    # assume u is aligned with the mean horizontal wind direction
+    L = obukhov_length(u_star, T_bar, Q_0)
+    grad = u_star / (k * z) * phi(z / L)
+    return grad
+
+def flux_richardson(eddy_momt_flux, mean_T, eddy_heat_flux, u_star, g = LOCAL_GRAVITY):
+    return (g / mean_T) * eddy_heat_flux / (eddy_momt_flux * wind_gradient(u_star, mean_T, eddy_heat_flux))
+
 def saturation_vapor_pressure(T):
     # SVP in kPa, using Tetens' approximation
     return 0.6113 * np.exp(17.2694 * (T - 273.15) / (T - 35.86))
