@@ -1,6 +1,6 @@
 ### sonic.py ###
 # Elliott Walker #
-# Last update: 19 July 2024 #
+# Last update: 23 July 2024 #
 # Analysis of the snippet of sonic data #
 
 import pandas as pd
@@ -198,7 +198,10 @@ def integral_scales(df, # dataframe containing original data
                 logger.log(f'Warning - failed to find cutoff for integration (variable {col}).')
 
         i_time = np.sum(Raa.loc[:cutoff_index]) * dt
-        i_length = i_time * abs(mean)
+        if i_time < 0:
+            if logger:
+                logger.log(f'Warning - found negative integral time scale (variable {col})')
+        i_length = abs(i_time * mean)
         scales[col] = (i_time, i_length)
 
     return scales, warn
@@ -254,6 +257,23 @@ def match_ri(df, # dataframe which we want to match ri to, based on its start & 
     stability = stability1 if stability1 == stability2 else f'{stability1}/{stability2}'
 
     return mean_ri, median_ri, stability
+
+def match_alpha(df, # dataframe which we want to match alpha to, based on its start & end times
+             df_alpha, # dataframe containing alpha values
+             where = 'alpha' # wind shear exponent column name
+             ):
+
+    start_time = df.index[0]
+    end_time = df.index[-1]
+
+    dfr = df_alpha.reset_index()
+    dfr['time'] = pd.to_datetime(dfr['time'])
+    sliced = dfr[dfr['time'].between(start_time,end_time)]
+
+    mean_alpha = sliced[where].mean()
+    median_alpha = sliced[where].median()
+
+    return mean_alpha, median_alpha
 
 # Geometrically align the Ux and Uy components of wind such that Ux is oriented in the direction of the mean wind and Uy is in the crosswind direction
 def align_frame(df, components = WINDS[:2]):
@@ -367,27 +387,30 @@ def plot_flux(fluxes, title = 'Flux Plot', saveto = None):
 
     return
 
-def save_flux(derived, filename, bulk_ri = None):
+def save_flux(derived, filename, bulk_ri = None, alpha = None):
     
     with open(filename, 'w') as f:
 
         if bulk_ri:
             f.write(bulk_ri+'\n')
+
+        if alpha:
+            f.write(alpha+'\n')
         
         for var, value in derived.items():
             f.write(f'{var}: {value:.4f}\n')
     
     return
 
-def append_ri(bulkMean, bulkMedian, flux, filename):
+def append_summary(info, filename):
 
     with open(filename, 'a') as f:
-        f.write(f'{bulkMean:.6f},{bulkMedian:.6f},{flux:.6f}\n')
+        f.write(f'{info}\n')
 
     return
 
 def _analyze_file(args):
-    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, rifile, logparent, multiproc = args
+    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, summaryfile, logparent, multiproc = args
 
     if multiproc:
         logger = logparent.sublogger()
@@ -404,6 +427,13 @@ def _analyze_file(args):
     os.makedirs(intermediate, exist_ok = True)
     
     df = load_frame(path, kelvinconvert = kelvinconvert)
+
+    starttime = df.index[0]
+    endtime = df.index[-1]
+    time_string = f'Time interval: {starttime} to {endtime}'
+    logger.log(time_string)
+
+    summaryinfo = f'{starttime},{endtime},{df[WINDS[0]].mean():.5f},{df[WINDS[1]].mean():.5f},{df[WINDS[2]].mean():.5f}'
 
     if align:
         df = align_frame(df)
@@ -427,14 +457,15 @@ def _analyze_file(args):
         plot_data(df, title = f'{name} Data', saveto = fpath, cols = WINDS)
         logger.log(f'Saved wind plots to {fpath}')
 
-    starttime = df.index[0]
-    endtime = df.index[-1]
-    time_string = f'Time interval: {starttime} to {endtime}'
-    logger.log(time_string)
-
+    alpha_string = None
     ri_string = None
     if df_match is not None:
+        mean_alpha, median_alpha = match_alpha(df, df_match)
+        summaryinfo += f',{mean_alpha:.5f},{median_alpha:.5f}'
+        alpha_string = f'Wind shear exponent alpha: mean {mean_alpha:.4f}, median {median_alpha:.4f}'
+        logger.log(alpha_string)
         mean_ri, median_ri, stability = match_ri(df, df_match)
+        summaryinfo += f',{mean_ri:.5f},{median_ri:.5f}'
         ri_string = f'Bulk Ri: mean {mean_ri:.4f}, median {median_ri:.4f} ({stability})'
         logger.log(ri_string)
 
@@ -460,27 +491,31 @@ def _analyze_file(args):
 
     if plotflux or saveflux:
         fluxes, derived = compute_fluxes(df, winds = WINDS, temp = TEMPERATURE)
+        logger.log(f'Computed flux information; flux Ri = {derived["Flux Ri"]}')
 
     if plotflux:
         fname = 'fluxes.png'
         fpath = os.path.abspath(os.path.join(intermediate, fname))
         plot_flux(fluxes, title = f'{name} Fluxes', saveto = fpath)
+        logger.log(f'Saved flux plots to {fpath}')
 
     if saveflux:
         fname = 'flux_calculations.txt'
         fpath = os.path.abspath(os.path.join(intermediate, fname))
-        save_flux(derived, filename = fpath, bulk_ri = ri_string)
-        if df_match is not None:
-            append_ri(mean_ri, median_ri, derived['Flux Ri'], filename = rifile)
+        save_flux(derived, filename = fpath, bulk_ri = ri_string, alpha = alpha_string)
+        summaryinfo += f',{derived["Flux Ri"]:.5f},{derived["Obukhov length"]:.5f},{derived["Friction velocity"]:.5f}'
+        logger.log(f'Saved flux information to {fpath}')
 
     if savescales:
         if align:
             fname = 'aligned_integralscales.txt'
         else:
             fname = 'integralscales.txt'
-        scales, warn = integral_scales(df, df_autocorr, cols = list(set(WINDS)&set(autocols)), threshold = threshold)
+        scales, warn = integral_scales(df, df_autocorr, cols = list(set(WINDS)&set(autocols)), threshold = threshold, logger = logger)
         fpath = os.path.abspath(os.path.join(intermediate,fname))
         save_scales(scales, filename = fpath, warn = warn, bulk_ri = ri_string, times = time_string, align = align)
+        length_scale = scales[WINDS[0]][1]
+        summaryinfo += f',{length_scale:.5f}'
         logger.log(f'Saved info to {fpath}')
 
     for var, s in scales.items():
@@ -488,6 +523,8 @@ def _analyze_file(args):
         i_time, i_length = s
         logger.log(f'\tIntegral time scale = {i_time:.3f} s')
         logger.log(f'\tIntegral length scale = {i_length:.3f} m')
+    
+    append_summary(summaryinfo, summaryfile)
     
 def analyze_directory(parent, 
                       *,
@@ -505,16 +542,25 @@ def analyze_directory(parent,
                       saveautocorrs = True,
                       savescales = True,
                       saveflux = True,
-                      rifile = None,
+                      summaryfile = None,
                       logger = Printer(),
                       nproc = 1
                       ):
-    
-    if align and saveflux and (rifile is not None) and (matchfile is not None):
-        with open(rifile, 'w') as f:
-            f.write('bulk_mean,bulk_median,flux\n')
 
     logger.log(f'Beginning analysis of {parent}', timestamp = True)
+
+    if (summaryfile is not None) and align and saveflux  and (matchfile is not None):
+        with open(summaryfile, 'w') as f:
+            f.write('start,end,mean_u,mean_v,mean_w')
+            if matchfile is not None:
+                f.write(',alpha_mean,alpha_median,Rib_mean,Rib_median')
+            if saveflux:
+                f.write(',Rif,L,ustar')
+            if savescales:
+                f.write(',length_scale')
+            f.write('\n')
+        logger.log(f'Saving summary information to {summaryfile}')
+
     if type(nproc) is int and nproc > 1:
         logger.log(f'MULTIPROCESSING ENABLED: {nproc=}')
         multiproc = True
@@ -529,7 +575,7 @@ def analyze_directory(parent,
     else:
         df_match = None
 
-    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, rifile, logger, multiproc)
+    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, plotflux, saveflux, summaryfile, logger, multiproc)
     directory = [(filename, *arguments) for filename in os.listdir(parent)]
 
     pool = multiprocessing.Pool(processes = nproc)
@@ -637,7 +683,7 @@ if __name__ == '__main__':
                       savedir = savedir,
                       plotflux = flux,
                       saveflux = flux,
-                      rifile = os.path.join(savedir, 'richardson.csv'),
+                      summaryfile = os.path.join(savedir, 'summary.csv'),
                       logger = logger,
                       nproc = int(args.nproc)
                       )
