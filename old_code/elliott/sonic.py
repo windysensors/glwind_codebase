@@ -11,8 +11,6 @@ from tqdm import tqdm
 from datetime import datetime
 import helper_functions as hf
 import multiprocessing
-import signal
-import sys
 
 WINDS = ['Ux','Uy','Uz'] # Columns containing wind speeds, in order
 TEMPERATURES = ['Ts', 'amb_tmpr'] # Columns containing temperatures in C
@@ -210,13 +208,17 @@ def save_scales(scales,
                 warn = False,
                 ri = None,
                 times = None,
-                order = WINDS
+                order = WINDS,
+                align = False
                 ):
 
     with open(filename, 'w') as f:
 
         if warn:
-            f.write(f"Warning - at least one variable's autocorrelation did not fall below the threshold, possibly signifying nonstationary data.")
+            f.write("Warning - at least one variable's autocorrelation did not fall below the threshold.")
+
+        if align:
+            f.write('Data geometrically aligned with Ux in direction of mean wind, Uy crosswind.\n')
 
         if times:
             f.write(times+'\n')
@@ -227,7 +229,8 @@ def save_scales(scales,
         vars = order if set(order) == set(scales.keys()) else scales.keys()
         for var in vars:
             i_time, i_length = scales[var]
-            f.write(f'{var}: Time scale = {i_time:.3f} s, Length scale = {i_length:.3f} m\n')
+            mean = i_length/i_time
+            f.write(f'{var}: Time scale = {i_time:.3f} s, Length scale = {i_length:.3f} m (Mean = {mean:.3f} m/s)\n')
 
     return
 
@@ -253,9 +256,58 @@ def match_ri(df, # dataframe which we want to match ri to, based on its start & 
 
     return ri_string
 
+# Geometrically align the Ux and Uy components of wind such that Ux is oriented in the direction of the mean wind and Uy is in the crosswind direction
+def align_frame(df, components = WINDS[:2]):
+
+    ux = df[components[0]]
+    uy = df[components[1]]
+
+    uxavg = np.mean(ux)
+    uyavg = np.mean(uy)
+    dir_to_align = np.arctan2(uyavg, uxavg)
+
+    ux_aligned = ux * np.cos(dir_to_align) + uy * np.sin(dir_to_align)
+    uy_aligned = - ux * np.sin(dir_to_align) + uy * np.cos(dir_to_align)
+
+    dfc = df.copy()
+    dfc[components[0]] = ux_aligned
+    dfc[components[1]] = uy_aligned
+
+    return dfc
+
+def plot_data(df,
+              title = 'Wind Plot',
+              saveto = None,
+              cols = WINDS):
+    
+    fig, ax = plt.subplots()
+    fig.suptitle(title, fontweight = 'bold')
+
+    starttime = df.index[0]
+    deltatime = df.index - starttime
+    deltaseconds = deltatime.days * 24 * 3600 + deltatime.seconds + deltatime.microseconds/1e6
+
+    for col in cols:
+        if col not in df.columns:
+            continue
+        ax.plot(deltaseconds, df[col], label = str(col), linewidth = 1)
+    
+    ax.set_ylabel('Wind speed (m/s)')
+    ax.set_xlabel(f'Seconds since {starttime}')
+    ax.legend()
+
+    fig.tight_layout(pad = 1)
+
+    if saveto is None:
+        plt.show()
+    else:
+        plt.savefig(saveto, bbox_inches='tight')
+    plt.close()
+
+    return
 
 def _analyze_file(args):
-    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logparent, multiproc = args
+    filename, parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, logparent, multiproc = args
 
     if multiproc:
         logger = logparent.sublogger()
@@ -273,10 +325,27 @@ def _analyze_file(args):
     
     df = load_frame(path, kelvinconvert = kelvinconvert)
 
+    if align:
+        df = align_frame(df)
+        logger.log('Aligned data: Ux oriented in direction of mean wind')
+
     if savecopy:
-        fname = os.path.abspath(os.path.join(intermediate,'data.csv'))
-        df.to_csv(fname)
-        logger.log(f'Copied data to {fname}')
+        if align:
+            fname = 'aligned_data.csv'
+        else:
+            fname = 'data.csv'
+        fpath = os.path.abspath(os.path.join(intermediate,fname))
+        df.to_csv(fpath)
+        logger.log(f'Copied data to {fpath}')
+
+    if plotdata:
+        if align:
+            fname = 'aligned_data.png'
+        else:
+            fname = 'data.png'
+        fpath = os.path.abspath(os.path.join(intermediate, fname))
+        plot_data(df, title = f'{name} Data', saveto = fpath, cols = WINDS)
+        logger.log(f'Saved wind plots to {fpath}')
 
     starttime = df.index[0]
     endtime = df.index[-1]
@@ -291,34 +360,39 @@ def _analyze_file(args):
     df_autocorr = compute_autocorrs(df, autocols = autocols, maxlag = maxlag, logger = logger)
 
     if saveautocorrs:
-        fname = os.path.abspath(os.path.join(intermediate,'autocorrs.csv'))
-        df_autocorr.to_csv(fname)
-        logger.log(f'Saved autocorrelations to {fname}')
+        if align:
+            fname = 'aligned_autocorrs.csv'
+        else:
+            fname = 'autocorrs.csv'
+        fpath = os.path.abspath(os.path.join(intermediate,fname))
+        df_autocorr.to_csv(fpath)
+        logger.log(f'Saved autocorrelations to {fpath}')
 
     if plotautocorrs:
-        fname = os.path.abspath(os.path.join(intermediate,'autocorr.png'))
-        plot_autocorrs(df_autocorr, title = f'{name} Autocorrelations', saveto = fname, threshold=threshold)
-        logger.log(f'Saved plots to {fname}')
+        if align:
+            fname = 'aligned_autocorrs.png'
+        else:
+            fname = 'autocorrs.png'
+        fpath = os.path.abspath(os.path.join(intermediate,fname))
+        plot_autocorrs(df_autocorr, title = f'{name} Autocorrelations', saveto = fpath, threshold=threshold)
+        logger.log(f'Saved autocorrelation plots to {fpath}')
 
     if savescales:
+        if align:
+            fname = 'aligned_integralscales.txt'
+        else:
+            fname = 'integralscales.txt'
         scales, warn = integral_scales(df, df_autocorr, cols = list(set(WINDS)&set(autocols)), threshold = threshold)
-        fname = os.path.abspath(os.path.join(intermediate,'integralscales.txt'))
-        save_scales(scales, filename = fname, warn = warn, ri = ri_string, times = time_string)
-        logger.log(f'Saved info to {fname}')
+        fpath = os.path.abspath(os.path.join(intermediate,fname))
+        save_scales(scales, filename = fpath, warn = warn, ri = ri_string, times = time_string, align = align)
+        logger.log(f'Saved info to {fpath}')
 
     for var, s in scales.items():
         logger.log(f'Mean {var} = {df[var].mean():.3f} m/s')
         i_time, i_length = s
         logger.log(f'\tIntegral time scale = {i_time:.3f} s')
         logger.log(f'\tIntegral length scale = {i_length:.3f} m')
-
-def init_worker():
-    # Worker processes should ignore SIGINT and let the parent process handle it
-    def interrupt():
-        print('interrupt')
-        raise KeyboardInterrupt
-    signal.signal(signal.SIGINT, interrupt)
-
+    
 def analyze_directory(parent, 
                       *,
                       kelvinconvert = TEMPERATURES,
@@ -327,7 +401,9 @@ def analyze_directory(parent,
                       threshold = 0.25,
                       savedir = '.',
                       matchfile = None,
+                      align = True,
                       savecopy = True,
+                      plotdata = True,
                       plotautocorrs = True,
                       saveautocorrs = True,
                       savescales = True,
@@ -350,21 +426,15 @@ def analyze_directory(parent,
     else:
         df_match = None
 
-    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, savecopy, plotautocorrs, saveautocorrs, savescales, logger, multiproc)
+    arguments = (parent, kelvinconvert, autocols, maxlag, threshold, savedir, df_match, align, savecopy, plotdata, plotautocorrs, saveautocorrs, savescales, logger, multiproc)
     directory = [(filename, *arguments) for filename in os.listdir(parent)]
 
-    pool = multiprocessing.Pool(processes = nproc, initializer=init_worker)
-
-    try:
-        # Use pool.map to distribute the work
-        pool.map(_analyze_file, directory)
-    except KeyboardInterrupt: # need to get this to work; the init_worker initializer doesn't work as expected
-        print('KeyboardInterrupt - terminating pool')
-        pool.terminate()
-    else:
-        pool.close()
-    finally:
-        pool.join()
+    pool = multiprocessing.Pool(processes = nproc)
+    
+    # Use pool.map to distribute the work
+    pool.map(_analyze_file, directory)
+    pool.close()
+    pool.join()
 
     logger.log(f'COMPLETED!', timestamp = True)
 
@@ -384,6 +454,7 @@ if __name__ == '__main__':
         description = 'Analyzes chunks of sonic data',
     )
 
+    parser.add_argument('-a', '--align', action = 'store_true', help = 'geometrically align Ux in the direction of the mean horizontal wind?')
     parser.add_argument('-c', '--clear', action = 'store_true', help = 'clear the target directory?')
     parser.add_argument('-y', '--yes', action = 'store_true', help = 'do not confirm before clearing?')
     parser.add_argument('-d', '--data', default = '../../DATA/KCC_106m_Flux_Tower_Data', help = 'input data directory')
@@ -398,6 +469,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    align = args.align
     nomatch = args.nomatch
     parent = args.data
     savedir = args.target
@@ -448,10 +520,11 @@ if __name__ == '__main__':
         logfile = os.path.abspath(logfile)
         logger = Logger(logfile = logfile)
 
-    analyze_directory(parent,
+    analyze_directory(parent = parent,
                       maxlag = 0.5,
                       threshold = 0.5,
                       matchfile = matchfile,
+                      align = align,
                       savedir = savedir,
                       logger = logger,
                       nproc = int(args.nproc)

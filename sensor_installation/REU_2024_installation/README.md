@@ -1,0 +1,5 @@
+This folder contains the codes developed for running two distinct installations during the final two weeks of the REU 2024 program.  
+
+The first installation integrates several environmental sensors including the RM Young 81000V Ultrasonic Anemometer, CS320 Digital Thermopile Pyranometer, and HygroVUE10 Digital Temperature & Relative Humidity Sensor, powered by a 24BP battery and a SP90-L solar panel, all managed by a CR1000X data logger. The main code, "HygroCS320Young.CR1X," collects data on wind, temperature, humidity, solar radiation, and system status at defined intervals, using specific wiring configurations and sensor addresses. Please refer to this code to see wiring and other important notes.  
+
+The second installation employs a CR350 data logger, MetSENS500 compact weather sensor, and SP20 solar panel to capture and record environmental data. This program and setup were authored by Chloe Amoroso, Elliot Walker, Youssef Mostafa, and Garrison Sagers, with last updates made in July 2024.
