@@ -686,5 +686,4 @@ if __name__ == '__main__':
                       summaryfile = os.path.join(savedir, 'summary.csv'),
                       logger = logger,
                       nproc = int(args.nproc)
-                      )
-    
+                    )
