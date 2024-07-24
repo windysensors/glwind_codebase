@@ -51,6 +51,22 @@ def plot_need_boom5():
         plt.legend()
         plt.show()
 
+def plot_noterrain():
+    fig, ax = plt.subplots(figsize = (5.5,4))
+    fig.suptitle('Annual Wind Profiles by Stability Class (Power Law Fits)')
+    ax.set_xlabel('Mean Velocity (m/s)')
+    ax.set_ylabel('Height (m)')
+    for sc in stability_classes:
+        df_sc = df10[df10['stability'] == sc]
+        means = df_sc[[f'ws_{h}m' for h in heights]].mean(axis=0)
+        mult, wsc = hf.power_fit(heights, means.values, both=True)
+        ax.scatter(means.values, heights, label=r'{sc}: $u(z)={a:.2f}z^{{{b:.3f}}}$'.format(sc=sc.capitalize(),a=mult,b=wsc))
+        ax.plot(mult * zvals**wsc, zvals)
+        print(f'{sc}: mult = {mult:.4f}, alpha = {wsc:.4f}')
+    ax.legend()
+    plt.show()
+
 if __name__ == '__main__':
-    plot_full_profile()
-    plot_need_boom5()
+    plot_noterrain()
+    #plot_full_profile()
+    #plot_need_boom5()
