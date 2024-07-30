@@ -10,7 +10,7 @@
 Include("CPU:young_config.CR1X")
 
 ' declare hidden variables
-Public RawData As String * 256
+Dim RawData As String * 256
 Dim NBytes
 
 ' declare public variables
@@ -77,7 +77,7 @@ BeginProg
     ' main scan
     Scan (1000/Frequency, msec, 0, 0)
         ' take in data (most recent record)
-        SerialInRecord (ComC5, RawData, 0, 43, &h0D, NBytes, 01)
+        SerialInRecord (ComC5, RawData, 0, OutputLength, &h0D, NBytes, 01)
         
         ' serial activity check in
         Active = ComPortIsActive(ComC5)
@@ -103,6 +103,7 @@ BeginProg
         CallTable RapidAnemometerData
         CallTable DeviceStatus
         CallTable Daily
+        
         
     NextScan
     

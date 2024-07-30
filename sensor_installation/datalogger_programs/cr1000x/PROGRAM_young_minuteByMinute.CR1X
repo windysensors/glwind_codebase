@@ -10,7 +10,7 @@
 Include("CPU:young_config.CR1X")
 
 ' declare hidden variables
-Public RawData As String * 256
+Dim RawData As String * 256
 Dim NBytes
 
 ' declare public variables
