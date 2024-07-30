@@ -1,4 +1,4 @@
-* Denote the common/standard unit.
+* Denotes the common/standard unit.
 
 Pressure [P] units:
     kPa (kilopascals) *

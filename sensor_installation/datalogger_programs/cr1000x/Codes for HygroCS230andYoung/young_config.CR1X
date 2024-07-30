@@ -1,0 +1,74 @@
+''' young_config.CR1X '''
+' Author:       Elliott Walker
+' Last update:  July 3, 2024
+' Description:  Functions for configuring internal settings for the Young 81000V anemometer
+'               using a CR1000X datalogger. Assumes serial communication has already been opened.
+' Usage:        First call ``Include("CPU:young_config.CR1X")'' to load this file.
+'               Then call any functions/subroutines defined here.
+'               [not intended or functional as a standalone program]
+
+' PortOut subroutine - send ASCII string serial output
+' Specify number of repeats as well as a delay for after transmission
+Sub PortOut (ComPort, outStr As String, repeats, delayMs)
+    Dim i
+    For i = 1 To repeats
+        SerialOut(ComPort, outStr, "", 0, 0)
+        If (i < repeats) Then
+            Delay(1, 1, 1) ' 1 ms delay between repeated instructions
+        EndIf
+    Next i
+    Delay(1, delayMs, 1)
+EndSub
+
+' PortUserOut subroutine - multiple-character user input emulation
+Sub PortUserOut (ComPort, outStr As String, delayMs)
+    Dim j, currentChar As String * 1
+    For j = 1 To Len(outStr) ' send one character at a time
+        currentChar = Mid(outStr, j, 1)
+        Call PortOut(ComPort, currentChar, 1, 500)
+    Next j
+    Call PortOut(ComPort, CHR(13), 1, delayMs) ' carriage return
+EndSub
+
+' ChangeFormat subroutine - change 81000V serial output string to custom format
+' See 81000V manual for options
+Sub ChangeFormat(ComPort, newFormat As String * 12)
+    Call PortOut(ComPort, CHR(27), 3, 500) ' 3xESC to enter command mode
+    Call PortOut(ComPort, "S", 1, 500) ' S for setup
+    Call PortOut(ComPort, "S", 1, 500) ' S for serial out format
+    Call PortOut(ComPort, "1", 1, 500) ' 1 for custom
+    Call PortUserOut(ComPort, newFormat, 2500) ' new format
+    Call PortOut(ComPort, "X", 1, 500) ' X for main menu
+    Call PortOut(ComPort, "X", 1, 500) ' X to enter operate mode
+    SerialFlush(ComPort) ' clear input buffer of anything received while communicating
+EndSub
+
+' ChangeFrequency subroutine - change 81000V measurement frequency
+Sub ChangeFrequency(ComPort, newFreq)
+    Dim choiceCar As String * 1
+    Select Case newFreq ' choose option character corresponding to desired frequency
+        Case 4
+            choiceCar = "A"
+        Case 5
+            choiceCar = "B"
+        Case 8
+            choiceCar = "C"
+        Case 10
+            choiceCar = "D"
+        Case 16
+            choiceCar = "E"
+        Case 20
+            choiceCar = "F"
+        Case 32
+            choiceCar = "G"
+        Case Else ' if not a valid option, provide `cancel` character "X"
+            choiceCar = "X"
+    End Select
+    Call PortOut(ComPort, CHR(27), 3, 500) ' 3xESC to enter command mode
+    Call PortOut(ComPort, "S", 1, 500) ' S for setup
+    Call PortOut(ComPort, "O", 1, 500) ' O for output frequency
+    Call PortOut(ComPort, choiceCar, 1, 2500) ' choice
+    Call PortOut(ComPort, "X", 1, 500) ' X for main menu
+    Call PortOut(ComPort, "X", 1, 500) ' X to enter operate mode
+    SerialFlush(ComPort) ' clear input buffer of anything received while communicating
+EndSub

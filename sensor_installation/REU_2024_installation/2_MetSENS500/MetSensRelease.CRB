@@ -1,0 +1,135 @@
+''' MetSensRelease.CRB '''
+' Authors: Chloe Amoroso and Elliott Walker
+' For MetSENS500 with CR350 (RS232)
+' Wiring Configurations (to CR350):
+'   MetSENS: [Red = SW1], [Green = C1], [White = C2], [Clear, Black = G]
+
+' declare hidden variables
+Dim WSStr As String * 60
+Dim ByteRet
+Dim ChkSumF As Boolean
+Dim MSData(9)
+Dim N(9) As Long
+
+' error codes (for fault detection)
+Alias N(1) = Good_Sample 'No fault, good samples
+Alias N(2) = Fault_Wind 'Wind fault
+Alias N(3) = Fault_Temperature 'Temperature fault
+Alias N(4) = Fault_Dewpoint 'Dewpoint fault
+Alias N(5) = Fault_Humidity 'Humidity fault
+Alias N(6) = Fault_Pressure 'Pressure sensor warning
+Alias N(7) = Fault_Compass 'Compass fault
+Alias N(8) = Fault_Undefined  'Undefined fault
+Alias N(9) = Fault_Checksum 'Checksum error
+
+' declare public variables for MetSENS
+Public WindDir_UC : Units WindDir_UC = Deg'Uncorrected wind direction
+Public WindDir_CC : Units WindDir_CC = Deg 'Compass corrected wind direction
+Public WindDir_True : Units WindDir_True = Deg 'Wind direction corrected by compass and magnetic declination
+Public Wind_Speed : Units Wind_Speed = m/s 'Wind speed
+Public BP : Units BP = hPa 'Barometric pressure
+Public RH : Units RH = % 'Relative humidity
+Public AirTemp : Units AirTemp = Deg C 'Air temperature
+Public DP : Units DP = Deg C 'Dewpoint
+Public MetSENS_Volts : Units MetSENS_Volts = V
+Public MetSENS_Status As Long : Units MetSENS_Status = unitless 'Status code of MetSENS
+' declare public variables for internals
+Public BattV : Units BattV = V
+Public PTemp : Units PTemp = Deg C
+
+Const MagDeclination = 10.24 'Cleveland OH magnetic declination
+
+' ten second data table
+DataTable (TenSecond,True,-1 )
+  DataInterval (0,10,Sec,10)
+  WindVector (1,Wind_Speed,WindDir_True,IEEE4,WindDir_True = NAN,0,0,1)
+  FieldNames ("Wind_Speed_avg,WindDir_avg")
+  Sample (1,BP,IEEE4)
+  Sample (1,RH,FP2)
+  Average (1,AirTemp,FP2,AirTemp = NAN)
+  Sample (1,DP,FP2)
+  Sample (1,MetSENS_Status,Long)
+  Totalize (1,Good_Sample,Long,False)
+EndTable
+
+' daily data table
+DataTable (Daily,True,-1)
+  DataInterval(0,1,day,10)
+  Maximum (1,AirTemp,FP2,AirTemp = NAN,True)
+  Minimum (1,AirTemp,FP2,AirTemp = NAN,True)
+  Sample (1,PTemp,FP2)
+  Minimum(1,BattV,FP2,False,False)
+EndTable
+
+' main Program
+BeginProg
+  ' open COMC1 for communications with the MetSENS500
+  SerialOpen(Com1,9600,3,0,301)
+
+  ' provide 12V power
+  SW12 (SW12_1,1 )
+  SW12 (SW12_2,1 )
+  
+  ' main scan @ 1Hz
+  Scan(1,Sec,1,0)
+    ' CR350 internal measurements
+    Battery(BattV)
+    PanelTemp(PTemp,60)
+
+    ' get the data from the serial buffer
+    SerialInRecord(Com1,WSStr,&h02,0,&h0D0A,ByteRet,01)
+
+    ' use checksum to verify the integrity of the data message
+    ChkSumF=HexToDec(Right(WSStr,2)) Eqv CheckSum(WSStr,9,Len(WSStr)-3)
+    If NOT ChkSumF Then WSStr = NAN
+
+    ' parse the data string
+    SplitStr(MSData(),WSStr,",",9,4)
+    WindDir_UC=MSData(1)
+    Wind_Speed=MSData(2)
+    WindDir_CC=MSData(3)
+    BP=MSData(4)
+    RH=MSData(5)
+    AirTemp=MSData(6)
+    DP=MSData(7)
+    MetSENS_Volts=MSData(8)
+    MetSENS_Status=MSData(9)
+
+    ' set diagnostic variables as needed
+    If ByteRet=0 Then MetSENS_Status=NAN
+    Move(Good_Sample,9,0,1)
+    Select Case MetSENS_Status
+    Case=0
+      Good_Sample=1
+    Case=1
+      Fault_Wind=1
+    Case=10
+      Fault_Temperature=1
+    Case=20
+      Fault_Dewpoint=1
+    Case=40
+      Fault_Humidity=1
+    Case=80
+      Fault_Pressure=1
+    Case=100
+      Fault_Compass=1
+    Else
+      Fault_Undefined=1
+    EndSelect
+    If NOT (ByteRet<>0 IMP ChkSumF) Then Fault_Checksum=1
+
+    ' calculate the true wind direction
+    If WindDir_UC <> NAN AND Good_Sample = 1 AND Fault_Checksum = 0 Then
+      WindDir_True = (WindDir_CC + MagDeclination + 360) MOD 360
+    Else
+      WindDir_True = NAN
+    EndIf
+
+    ' store data in tables
+    CallTable TenSecond
+    CallTable Daily
+
+  NextScan
+
+EndProg
+

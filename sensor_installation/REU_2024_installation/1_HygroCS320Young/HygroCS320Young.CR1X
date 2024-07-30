@@ -1,0 +1,197 @@
+''' HygroCS320Young.CR1X '''
+' Authors: Chloe Amoroso, Elliot Walker
+' Last Update: July 23, 2024
+' Description: This program is designed for a Campbell Scientific CR1000X 
+'  data logger. It handles data collection from an RM Young 81000V Ultrasonic 
+'  Anemometer, HygroVUE10 Digital Temperature & Relative Humidity Sensor, 
+'  and a CS320 Digital Thermopile Pyranometer, including various other 
+'  environmental sensors. The program sets up multiple data tables to record 
+'  wind, temperature, humidity, solar radiation, and system status data at 
+'  specified intervals.
+' Usage: Program to directly run in CR1000X datalogger with RS-232 wiring 
+'  @ComC5) to Young 81000V and SDI-12 wiring (@ComC1 with CS320 address@1 and 
+'  HygroVUE10 address@0)
+' Dependencies: young_config.CR1X (expected in CPU). CS320 must have SDI12 address@1
+'  and HygroVUE10 must have SDI12 address@0 (may need to use codes CS320_Address1.CR1X
+'  and Hygro_Address0.CR1X)
+' Wiring Configurations (to CR1000x):
+' 	CS320: [Red = 12V], [White = C1], [Clear, Blue, Black = G]
+'  	HygroVUE10: [Brown = 12V], [White = C1], [Clear, Black = G]
+'	Young: [Red = 12V], [Blue, Black = G], [Orange = C5], [Yellow = C6], [Brown, Green, White = NOT CONNECTED] 
+' Estimated CR1000X table fill time (75MB) is ~ 1 day 23 hours,
+'   indicating roughly 1.2 GB / month of data generation
+
+' external code
+Include("CPU:young_config.CR1X")
+
+' declare hidden variables for Young
+Dim RawData As String * 256
+Dim NBytes
+Dim ChkSum As String * 2
+
+' declare public variables for Young
+Public Active As Boolean
+Public GoodSample
+Public WData(6)
+Alias WData(1) = UWind : Units UWind = m/s
+Alias WData(2) = VWind : Units VWind = m/s
+Alias WData(3) = WWind : Units WWind = m/s
+Alias WData(4) = SpeedOfSound : Units SpeedOfSound = m/s
+Alias WData(5) = SonicTemp : Units SonicTemp = Deg C
+Alias WData(6) = ErrCode
+
+' declare hidden variables for HygroVUE and CS320
+Dim AirDewDif
+Dim Htr
+
+' declare public variables for HygroVUE and CS320
+Public SlrMJ : Units SlrMJ = MJ/m^2
+Public DewPtC : Units DewPtC = Deg C
+Public HtrCtrl As Boolean
+Public TRHData(2)
+Alias TRHData(1) = AirTC : Units AirTC = Deg C
+Alias TRHData(2) = RH : Units RH = %
+Public CS320(4)
+Alias CS320(1) = SlrW : Units SlrW = W/m^2
+Alias CS320(2) = Raw_mV : Units Raw_mV = mV
+Alias CS320(3) = CS320_Temp : Units CS320_Temp = Deg C
+Alias CS320(4) = CS320_Angle : Units CS320_Angle = degrees ' SN = 4279 > 3505 so detector angle is one dimensional
+
+' declare public variables for internals
+Public BattV : Units BattV = V
+Public PTemp : Units PTemp = Deg C
+
+' baud rate for the Young per the manual
+Const BaudRate = -38400
+
+' serial output string format
+Const FormatString = "5ABEC" ' UVW, speed of sound, sonic temp, checksum, error code
+Const OutputLength = 43      ' 5ABCE takes 21+7+8+3+4=43 bytes
+
+' measurement frequency
+Const Frequency = 20
+
+' critical battery voltage, under which CS320 heating should be disabled
+Const CriticalVoltage = 11.7
+
+' high frequency data collection (20 Hz) from Young
+DataTable (HighFrequency, True, -1)
+    DataInterval (0, 1000/Frequency, msec, 10)
+    Sample (1, UWind, IEEE4)
+    Sample (1, VWind, IEEE4)
+    Sample (1, WWind, IEEE4)
+    Sample (1, SpeedOfSound, IEEE4)
+    Sample (1, SonicTemp, FP2)
+    Sample (1, GoodSample, Boolean)
+EndTable
+
+' low frequency data collection (every 10 seconds: 0.1 Hz) from CS320 & HygroVUE
+DataTable (LowFrequency,True,-1)
+    DataInterval (0, 10, Sec, 10)
+    Sample (1, AirTC, FP2)
+    Sample (1, RH, FP2)
+    Sample (1, SlrW, FP2)
+    Sample (1, Raw_mV, FP2)
+    Sample (1, CS320_Temp, FP2)
+    Sample (1, CS320_Angle, FP2)
+    Totalize (1, SlrMJ, IEEE4, False)
+    Sample (1, DewPtC, FP2)
+EndTable
+
+' status data table: every 10 minutes, confirm activity and check in on battery + panel temp
+DataTable (DeviceStatus, True, -1)
+    DataInterval (0, 10, min, 10)
+    Sample (1, Active, Boolean)
+    Sample (1, PTemp, FP2)
+    Sample (1, BattV, FP2)
+EndTable
+
+' daily data table: minimum battery voltage, and max&min air temperatures
+DataTable (Daily, True, -1)
+    DataInterval (0, 1, day, 10)
+    Minimum (1, BattV, FP2, False, False)
+    Minimum (1, AirTC, FP2, False, False)
+    Maximum (1, AirTC, FP2, False, False)
+EndTable
+
+' main program
+BeginProg
+    ' open serial port for communication with sensor
+    SerialOpen(ComC5, BaudRate, 0, 0, 10000, 0)
+    
+    ' modify settings
+    Call ChangeFormat(ComC5, FormatString)
+    Call ChangeFrequency(ComC5, Frequency)
+
+    ' main scan for 20Hz sampling
+    Scan (1000/Frequency, msec, 1, 0)
+        ' take in data (most recent record)
+        SerialInRecord (ComC5, RawData, 0, OutputLength, &h0D, NBytes, 01)
+        
+        ' serial activity check in
+        Active = ComPortIsActive(ComC5)
+        
+        ' split raw data string
+        SplitStr(WData(), RawData, " ", 6, 6)
+        ChkSum = Right(RawData, 2)
+        
+        ' check for errors (nonzero error code or checksum mismatch)
+        If ErrCode <> 0 Then
+            GoodSample = 0
+        ElseIf Hex(CheckSum(RawData, 9, Len(RawData)-3)) <> ChkSum Then
+            GoodSample = 0
+        Else
+            GoodSample = -1
+        EndIf
+        
+        ' store data in tables
+        CallTable HighFrequency
+
+    NextScan
+
+    ' secondary scan for other sensors
+    SlowSequence
+        ' scan every ten seconds
+        Scan(10,Sec,2,0)
+            ' measure internals: battery voltage and panel temperature
+            Battery(BattV)
+            PanelTemp(PTemp,60)'
+            
+            ' HygroVUE measurements
+            SDI12Recorder(TRHData(),C1,"0","M!",1,0,-1)
+
+            ' CS320 measurements
+            SDI12Recorder(CS320(),C1,"1","M4!",1,0,-1)
+
+            ' Calculate total flux based on 10 second scan rate
+            SlrMJ=SlrW*1E-05
+
+            '''CS320 heater control:'''
+                ' Dew point calculation
+                DewPoint(DewPtC,AirTC,RH)
+                'Calculate the difference 'AirDewDif' between the CS320 temperature and dewpoint
+                AirDewDif=CS320_Temp-DewPtC
+                'If the CS320 temperature or the difference between the CS320 temperature and dew point are less than 2 degrees C, turn the CS320 heater on
+                If CS320_Temp < 2 OR AirDewDif < 2 Then HtrCtrl = True
+                'If the CS320 temperature and the difference between the CS320 temperature and dew point are greater than 3 degrees C, turn the CS320 heater off
+                If CS320_Temp > 3 AND AirDewDif > 3 Then HtrCtrl = False
+                'Always turn the CS320 heater off if the datalogger battery voltage is less than 11.7 volts
+                If BattV < CriticalVoltage Then HtrCtrl = False
+                'Issue the appropriate SDI-12 command to turn the CS320 heater on or off depending on the state of the 'HtrCtrl' variable
+                If HtrCtrl = True Then
+                    SDI12Recorder(Htr,C1,"1","XHON!",1,0)
+                Else
+                    SDI12Recorder(Htr,C1,"1","XHOFF!",1,0)
+                EndIf
+
+            ' store data in tables
+            CallTable LowFrequency
+            CallTable DeviceStatus
+            CallTable Daily
+
+        NextScan
+
+    EndSequence
+
+EndProg
+

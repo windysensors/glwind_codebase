@@ -6,7 +6,7 @@ Information
 
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
-**Last Update:** 12 July 2024  
+**Last Update:** 16 July 2024  
 This package contains code for handling and analyzing certain types of meteorological tower (met tower) data.  
 Note: this package, as well as its documentation in this README file, are still in early development.  
 

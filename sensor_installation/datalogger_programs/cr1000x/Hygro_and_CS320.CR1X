@@ -1,0 +1,98 @@
+'CR1000X Series
+'Created by Short Cut (4.5)
+
+'Declare Variables and Units
+Dim AirDewDif_2
+Dim Htr_2
+Public BattV
+Public PTemp_C
+Public TRHData(2)
+Public CS320_2(6)
+Public SlrMJ_2
+Public DewPtC_2
+Public HtrCtrl_2 As Boolean
+
+Alias TRHData(1)=AirTC
+Alias TRHData(2)=RH
+Alias CS320_2(1)=SlrW_2
+Alias CS320_2(2)=Raw_mV_2
+Alias CS320_2(3)=CS320_Temp_2
+Alias CS320_2(4)=CS320_X_2
+Alias CS320_2(5)=CS320_Y_2
+Alias CS320_2(6)=CS320_Z_2
+
+Units BattV=Volts
+Units PTemp_C=Deg C
+Units SlrMJ_2=MJ/m^2
+Units DewPtC_2=Deg C
+Units AirTC=Deg C
+Units RH=%
+Units SlrW_2=W/m^2
+Units Raw_mV_2=mV
+Units CS320_Temp_2=Deg C
+Units CS320_X_2=degrees
+Units CS320_Y_2=degrees
+Units CS320_Z_2=degrees
+
+'Define Data Tables
+DataTable(Hygro_and_CS230_Out,True,-1)
+	DataInterval(0,10,Sec,10)
+	Sample(1,BattV,FP2)
+	Sample(1,PTemp_C,FP2)
+	Sample(1,AirTC,FP2)
+	Sample(1,RH,FP2)
+	Sample(1,SlrW_2,FP2)
+	Sample(1,Raw_mV_2,FP2)
+	Sample(1,CS320_Temp_2,FP2)
+	Sample(1,CS320_X_2,FP2)
+	Sample(1,CS320_Y_2,FP2)
+	Sample(1,CS320_Z_2,FP2)
+	Totalize(1,SlrMJ_2,IEEE4,False)
+	Sample(1,DewPtC_2,FP2)
+EndTable
+
+DataTable(Table2,True,-1)
+	DataInterval(0,1440,Min,10)
+	Minimum(1,BattV,FP2,False,False)
+EndTable
+
+'Main Program
+BeginProg
+	'Main Scan
+	Scan(10,Sec,1,0)
+		'Default CR1000X Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		'Default CR1000X Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,60)
+		'HygroVUE5/HygroVUE10 Digital Temperature & Relative Humidity Sensor measurements 'AirTC' and 'RH'
+		SDI12Recorder(TRHData(),C1,"0","M!",1,0,-1)
+		'CS320 Digital Thermopile Pyranometer (SN<=3505) measurements 'SlrW_2', 'Raw_mV_2', 'CS320_Temp_2', 'CS320_X_2', 'CS320_Y_2', and 'CS320_Z_2'
+		SDI12Recorder(CS320_2(),C1,"1","M4!",1,0,-1)
+		'Calculate total flux
+		'The multiplier to calculate total flux was calculated by Short Cut
+		'and based on a program execution rate (scan rate) of 10 Seconds.
+		'If you change the program execution rate outside of Short Cut with the CRBasic Editor
+		'you will need to recalculate this multiplier. See the sensor manual for more details.
+		SlrMJ_2=SlrW_2*1E-05
+		'CS320 Digital Thermopile Pyranometer heater control
+		'Dew point calculation 'DewPtC_2'
+		DewPoint(DewPtC_2,AirTC,RH)
+		'Calculate the difference 'AirDewDif_2' between the CS320 temperature and dewpoint
+		AirDewDif_2=CS320_Temp_2-DewPtC_2
+		'If the CS320 temperature or the difference between the CS320 temperature and dew point are less than 2 degrees C, turn the CS320 heater on
+		If CS320_Temp_2 < 2 OR AirDewDif_2 < 2 Then HtrCtrl_2 = True
+		'If the CS320 temperature and the difference between the CS320 temperature and dew point are greater than 3 degrees C, turn the CS320 heater off
+		If CS320_Temp_2 > 3 AND AirDewDif_2 > 3 Then HtrCtrl_2 = False
+		'Always turn the CS320 heater off if the datalogger battery voltage is less than 11.7 volts
+		If BattV < 11.7 Then HtrCtrl_2 = False
+		'Issue the appropriate SDI-12 command to turn the CS320 heater on or off depending on the state of the 'HtrCtrl_2' variable
+		If HtrCtrl_2 = True Then
+			SDI12Recorder(Htr_2,C1,"1","XHON!",1,0)
+		Else
+			SDI12Recorder(Htr_2,C1,"1","XHOFF!",1,0)
+		EndIf
+		'Call Data Tables and Store Data
+		CallTable Hygro_and_CS230_Out
+		CallTable Table2
+	NextScan
+EndProg

@@ -1,0 +1,14 @@
+Original workflow here:
+combine -> reduce -> (plots, profiles, windroses, sonic)
+
+Information (* - library):
+combine.py - load data (accounting for the weird formatting), merge into one nicely formatted dataframe
+reduce.py - outlier removal, resampling, compute derived quantities, perform stability + terrain classifications
+*helper_functions.py - useful functions for calculations
+windroses.py - generate various windroses
+profiles.py - generate wind profile plots
+plots.py - generate other plots
+sonic.py - handle chunks of sonic data, can match bulk Ri from output of reduce.py. multithreading possible
+    Example usage: python sonic.py -c -n 4 --data='../../DATA/KCC_106m_Flux_Tower_Data/' --target='sonic_results' --match='ten_minutes_labeled.csv'
+    The above will use n=4 CPUs (check nproc for how many you have available)
+sonic_single.py - sonic.py but without multithreading capabilities
