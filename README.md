@@ -7,9 +7,13 @@ Information
 
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
-**Last Update:** 24 July 2024  
+**Last Update:** 25 September 2024  
 
-This is a repository of the code and data used in the [Summer 2024 GLWind REU](https://engineering.csuohio.edu/glwind_reu/glwind_reu) program. It was designed both for our own use and to allow others in the future to more easily build upon our work. The majority of this repository is dedicated to the code first used for analysis on a dataset from Cedar Rapids, Iowa for the project *Wind profile characterization based on surface terrain and atmospheric thermal stability*.  
+This is a repository of the code and data used in the [Summer 2024 GLWind REU](https://engineering.csuohio.edu/glwind_reu/glwind_reu) program. It was designed both for our own use and to allow others in the future to more easily build upon our work. The majority of this repository is dedicated to the code first used for analysis on a dataset from Cedar Rapids, Iowa for the project *Wind profile characterization based on surface terrain and atmospheric thermal stability*. 
+
+UPDATE (Elliott - 25 September 2024)
+--------------------------
+Hi everyone, I didn't end up having time to finish the `windprofiles` package, and this repository got messy anyways. For everything important to the [wind profile analysis/characterization project](https://engineering.csuohio.edu/glwind_reu/wind-profile-characterization-based-surface-terrain-and-atmospheric-thermal-stability) - that is, pretty much anything that doesn't have to do with the sensor installation, excepting the unfinished `windprofiles` package, see my new repository [windprofile_characterization](https://github.com/Intergalactyc/windprofile_characterization). It will have most(/all?) of the code actually being used in the analysis, which I'm currently working on in Fall '24. Hopefully this glwind_codebase repo is still useful so that you can see a complete record of all that we did during Summer 2024; for the current state of the analysis though you probably want to look at the new one. Feel free to reach out to me at walker.elliott.j@gmail.com if you're confused by the organization between these or anything else regarding the code!
 
 Repository contents
 -------------------
