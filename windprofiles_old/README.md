@@ -1,4 +1,4 @@
-windprofiles package
+windprofiles_old package
 ====================
 
 Information
@@ -6,10 +6,11 @@ Information
 
 **Authors:** Elliott Walker, Hudson Hart, Chloe Amoroso  
 **Creation Date:** 8 July 2024  
-**Last Update:** 16 July 2024  
+**Last Update:** 6 January 2025
 This package contains code for handling and analyzing certain types of meteorological tower (met tower) data.  
-Note: this package, as well as its documentation in this README file, are still in early development.  
+Note: this package, as well as its documentation in this README file, are still in early development.
 
+*UPDATE:* As noted in the parent README.md file, this is deprecated and you should go to https://github.com/Intergalactyc/windprofile_characterization instead.
 
 Getting started
 ---------------
